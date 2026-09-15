@@ -43,7 +43,7 @@ export default function LandingPage() {
     <main className="min-h-screen bg-[#f7faff] dark:bg-slate-950 text-slate-900 dark:text-slate-50">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8">
         <Link href="/">
-          <Image src="/icon-192.png" alt="Kudos" width={40} height={40} className="size-10" priority />
+          <Image src="/icon-192.png" alt="Kudos" width={56} height={56} className="size-14" priority />
         </Link>
         <nav className="flex items-center gap-3 text-sm font-medium">
           <Link href="/login" className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100">Log in</Link>

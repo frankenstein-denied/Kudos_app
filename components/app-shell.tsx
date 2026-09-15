@@ -70,13 +70,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return <div className="min-h-screen bg-[#f7faff] dark:bg-slate-950 text-slate-900 dark:text-slate-50">
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-6 lg:flex">
-      <Link href="/dashboard" className="mb-10 flex items-center px-2"><Image src="/icon-192.png" alt="Kudos" width={40} height={40} className="size-10" /></Link>
+      <Link href="/dashboard" className="mb-10 flex items-center px-2"><Image src="/icon-192.png" alt="Kudos" width={56} height={56} className="size-14" /></Link>
       <Nav pathname={pathname} onNavigate={close} badges={badges} />
       <Link href="/profile" className="mt-auto flex items-center gap-3 border-t border-slate-100 dark:border-slate-800 pt-5"><Avatar initials={initials} /><div className="min-w-0"><p className="truncate text-sm font-semibold">{name}</p><p className="text-xs text-slate-400 dark:text-slate-500">{username}</p></div></Link>
     </aside>
     {open && <button aria-label="Close navigation" onClick={close} className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" />}
     <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-white dark:bg-slate-900 px-5 py-6 shadow-xl transition-transform lg:hidden', open ? 'translate-x-0' : '-translate-x-full')}>
-      <div className="mb-8 flex items-center justify-between"><Link href="/dashboard" onClick={close}><Image src="/icon-192.png" alt="Kudos" width={40} height={40} className="size-10" /></Link><button aria-label="Close menu" onClick={close} className="rounded-lg p-2 text-slate-400 dark:text-slate-500"><X className="size-5" /></button></div><Nav pathname={pathname} onNavigate={close} badges={badges} />
+      <div className="mb-8 flex items-center justify-between"><Link href="/dashboard" onClick={close}><Image src="/icon-192.png" alt="Kudos" width={56} height={56} className="size-14" /></Link><button aria-label="Close menu" onClick={close} className="rounded-lg p-2 text-slate-400 dark:text-slate-500"><X className="size-5" /></button></div><Nav pathname={pathname} onNavigate={close} badges={badges} />
     </aside>
     <div className="lg:pl-64"><header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-5 backdrop-blur md:px-8"><button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 lg:hidden"><Menu className="size-5" /></button><div className="hidden text-sm font-medium text-slate-500 dark:text-slate-400 lg:block">Make space for good things.</div><div className="ml-auto flex items-center gap-2">
       <div className="relative">
