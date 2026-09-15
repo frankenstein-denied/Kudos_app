@@ -3,7 +3,18 @@ import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Avatar, StoryCard } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
-import { getOrCreateConversation, getUserProfile, isFriendWith, sendFriendRequest, subscribeUserStories, type Story, type UserProfile } from '@/lib/firestore'
+import {
+  acceptFriendRequest,
+  getOrCreateConversation,
+  getRelationship,
+  getUserProfile,
+  isFriendWith,
+  sendFriendRequest,
+  subscribeUserStories,
+  type Relationship,
+  type Story,
+  type UserProfile,
+} from '@/lib/firestore'
 import { initialsFrom } from '@/lib/utils'
 
 export default function UserProfilePage({ params }: { params: Promise<{ userId: string }> }) {
@@ -15,7 +26,8 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
   const [messaging, setMessaging] = useState(false)
   const [messageError, setMessageError] = useState('')
   const [canView, setCanView] = useState(true)
-  const [requesting, setRequesting] = useState(false)
+  const [relationship, setRelationship] = useState<Relationship>({ kind: 'none' })
+  const [actionPending, setActionPending] = useState(false)
 
   useEffect(() => {
     getUserProfile(userId).then(setProfile)
@@ -29,6 +41,11 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
     }
     isFriendWith(user.uid, userId).then(setCanView)
   }, [profile, user, userId])
+
+  useEffect(() => {
+    if (!user) return
+    getRelationship(user.uid, userId).then(setRelationship)
+  }, [user, userId])
 
   useEffect(() => {
     if (!canView) return
@@ -48,6 +65,28 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
     }
   }
 
+  async function addFriend() {
+    if (!user) return
+    setActionPending(true)
+    try {
+      await sendFriendRequest(user.uid, userId)
+      setRelationship({ kind: 'sent' })
+    } finally {
+      setActionPending(false)
+    }
+  }
+
+  async function acceptRequest() {
+    if (!user || relationship.kind !== 'received') return
+    setActionPending(true)
+    try {
+      await acceptFriendRequest(relationship.requestId, userId, user.uid)
+      setRelationship({ kind: 'friends' })
+    } finally {
+      setActionPending(false)
+    }
+  }
+
   if (!profile) return <p className="text-center text-sm text-slate-400 dark:text-slate-500">Loading profile…</p>
 
   return <div className="mx-auto max-w-3xl">
@@ -57,10 +96,13 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
       <p className="text-sm text-slate-500 dark:text-slate-400">@{profile.username}</p>
       {canView && profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600 dark:text-slate-300">{profile.bio}</p>}
       {canView && <div className="mt-5 flex justify-center gap-6 text-sm"><span><strong>{profile.friendsCount}</strong> Friends</span><span><strong>{profile.storiesCount}</strong> Stories</span></div>}
-      {user?.uid !== userId && <div className="mt-5 flex flex-col items-center gap-2">
-        <div className="flex justify-center gap-2">
+      {relationship.kind !== 'self' && <div className="mt-5 flex flex-col items-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <button onClick={message} disabled={messaging} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{messaging ? 'Opening…' : 'Message'}</button>
-          {!canView && <button onClick={async () => { setRequesting(true); if (user) await sendFriendRequest(user.uid, userId); setRequesting(false) }} disabled={requesting} className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold disabled:opacity-50">{requesting ? 'Sending…' : 'Add friend'}</button>}
+          {relationship.kind === 'none' && <button onClick={addFriend} disabled={actionPending} className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold disabled:opacity-50">{actionPending ? 'Sending…' : 'Add friend'}</button>}
+          {relationship.kind === 'sent' && <span className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold text-slate-400 dark:text-slate-500">Request sent</span>}
+          {relationship.kind === 'received' && <button onClick={acceptRequest} disabled={actionPending} className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold disabled:opacity-50">{actionPending ? 'Accepting…' : 'Accept request'}</button>}
+          {relationship.kind === 'friends' && <span className="rounded-xl border border-emerald-200 dark:border-emerald-900 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Friends</span>}
         </div>
         {messageError && <p className="text-xs text-red-600 dark:text-red-400">{messageError}</p>}
       </div>}

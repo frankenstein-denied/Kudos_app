@@ -329,6 +329,26 @@ export async function declineFriendRequest(requestId: string) {
   await deleteDoc(doc(db, 'friend_requests', requestId))
 }
 
+export type Relationship =
+  | { kind: 'self' }
+  | { kind: 'friends' }
+  | { kind: 'sent' }
+  | { kind: 'received'; requestId: string }
+  | { kind: 'none' }
+
+export async function getRelationship(meUid: string, otherUid: string): Promise<Relationship> {
+  if (meUid === otherUid) return { kind: 'self' }
+  const [friends, sentSnap, receivedSnap] = await Promise.all([
+    isFriendWith(meUid, otherUid),
+    getDocs(query(collection(db, 'friend_requests'), where('fromUid', '==', meUid), where('toUid', '==', otherUid))),
+    getDocs(query(collection(db, 'friend_requests'), where('fromUid', '==', otherUid), where('toUid', '==', meUid))),
+  ])
+  if (friends) return { kind: 'friends' }
+  if (!receivedSnap.empty) return { kind: 'received', requestId: receivedSnap.docs[0].id }
+  if (!sentSnap.empty) return { kind: 'sent' }
+  return { kind: 'none' }
+}
+
 async function profilesFor(uids: string[]): Promise<Map<string, UserProfile>> {
   const map = new Map<string, UserProfile>()
   await Promise.all(
