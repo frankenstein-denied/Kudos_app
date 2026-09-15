@@ -37,8 +37,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // consumes the result of that round trip once the browser comes back,
     // and surfaces an error if the redirect itself failed (e.g. storage
     // partitioned in-app browsers) instead of failing silently.
+    //
+    // getRedirectResult() legitimately resolves to null (not a rejection)
+    // whenever there was no pending redirect — which is the case on nearly
+    // every page load, for nearly every user. Only show a banner for error
+    // codes that actually mean "a redirect sign-in was attempted and
+    // failed"; anything else gets logged, not shown, so a misconfiguration
+    // here can't alarm every visitor on every page again (as
+    // auth/argument-error from a missing popupRedirectResolver did).
+    const REDIRECT_FAILURE_CODES = new Set([
+      'auth/missing-or-invalid-nonce',
+      'auth/network-request-failed',
+      'auth/timeout',
+      'auth/web-storage-unsupported',
+      'auth/account-exists-with-different-credential',
+      'auth/credential-already-in-use',
+    ])
     getRedirectResult(auth).catch((err) => {
-      setRedirectError(err?.code === 'auth/missing-or-invalid-nonce' || err?.message?.includes('missing initial state')
+      const code = err?.code as string | undefined
+      if (!code || !REDIRECT_FAILURE_CODES.has(code)) {
+        console.error('getRedirectResult failed (not shown to user):', err)
+        return
+      }
+      setRedirectError(code === 'auth/missing-or-invalid-nonce'
         ? "Sign-in didn't complete — this browser may be blocking the storage Google sign-in needs. Try opening this link directly in Chrome instead of an in-app browser."
         : 'Could not complete Google sign-in. Please try again.')
     })
