@@ -388,7 +388,7 @@ export async function suggestFriends(uid: string, exclude: Set<string>, max = 8)
 
 // ---------- Conversations ----------
 
-export type Conversation = { id: string; otherUid: string; otherProfile: UserProfile | null; lastMessage: string; updatedAt: Timestamp | null }
+export type Conversation = { id: string; otherUid: string; otherProfile: UserProfile | null; lastMessage: string; lastMessageSenderId: string; updatedAt: Timestamp | null }
 export type Message = { id: string; senderId: string; text: string; createdAt: Timestamp | null }
 
 export function conversationId(uidA: string, uidB: string) {
@@ -403,6 +403,7 @@ export async function getOrCreateConversation(uidA: string, uidB: string) {
     await setDoc(ref, {
       participantIds: [uidA, uidB],
       lastMessage: '',
+      lastMessageSenderId: '',
       updatedAt: serverTimestamp(),
     })
   }
@@ -413,8 +414,8 @@ export function subscribeConversations(uid: string, cb: (conversations: Conversa
   const q = query(collection(db, 'conversations'), where('participantIds', 'array-contains', uid))
   return onSnapshot(q, async (snap) => {
     const rows = snap.docs.map((d) => {
-      const data = d.data() as { participantIds: string[]; lastMessage: string; updatedAt: Timestamp | null }
-      return { id: d.id, otherUid: data.participantIds.find((p) => p !== uid) ?? uid, lastMessage: data.lastMessage, updatedAt: data.updatedAt }
+      const data = d.data() as { participantIds: string[]; lastMessage: string; lastMessageSenderId?: string; updatedAt: Timestamp | null }
+      return { id: d.id, otherUid: data.participantIds.find((p) => p !== uid) ?? uid, lastMessage: data.lastMessage, lastMessageSenderId: data.lastMessageSenderId ?? '', updatedAt: data.updatedAt }
     })
     const profiles = await profilesFor(rows.map((r) => r.otherUid))
     cb(
@@ -432,5 +433,5 @@ export function subscribeMessages(convId: string, cb: (messages: Message[]) => v
 
 export async function sendMessage(convId: string, senderId: string, text: string) {
   await addDoc(collection(db, 'conversations', convId, 'messages'), { senderId, text, createdAt: serverTimestamp() })
-  await updateDoc(doc(db, 'conversations', convId), { lastMessage: text, updatedAt: serverTimestamp() })
+  await updateDoc(doc(db, 'conversations', convId), { lastMessage: text, lastMessageSenderId: senderId, updatedAt: serverTimestamp() })
 }

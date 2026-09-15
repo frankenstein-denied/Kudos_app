@@ -38,20 +38,20 @@ export default function LoginPage() {
     }
   }
 
-  return <main className="flex min-h-screen items-center justify-center bg-[#f7faff] p-5">
-    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-      <div className="mb-8 text-center"><h1 className="text-2xl font-bold">Welcome back to Kudos</h1><p className="mt-2 text-sm text-slate-500">A little kindness goes a long way.</p></div>
-      <button onClick={google} disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60">
+  return <main className="flex min-h-screen items-center justify-center bg-[#f7faff] dark:bg-slate-950 p-5">
+    <div className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 shadow-sm">
+      <div className="mb-8 text-center"><h1 className="text-2xl font-bold">Welcome back to Kudos</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">A little kindness goes a long way.</p></div>
+      <button onClick={google} disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-60">
         <GoogleIcon className="size-5" /> Continue with Google
       </button>
-      <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
+      <div className="my-5 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500"><span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />or<span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /></div>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" />
-        <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="rounded-xl border border-slate-200 px-4 py-3 text-sm" />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-sm" />
+        <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-sm" />
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button disabled={loading} className="rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white disabled:opacity-60">{loading ? 'Signing in…' : 'Log in'}</button>
       </form>
-      <p className="mt-6 text-center text-sm text-slate-500">New here? <Link href="/register" className="font-semibold text-blue-600">Create an account</Link></p>
+      <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">New here? <Link href="/register" className="font-semibold text-blue-600">Create an account</Link></p>
     </div>
   </main>
 }

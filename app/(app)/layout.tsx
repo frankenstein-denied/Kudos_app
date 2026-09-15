@@ -15,7 +15,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7faff] text-sm text-slate-400">
+      <div className="flex min-h-screen items-center justify-center bg-[#f7faff] dark:bg-slate-950 text-sm text-slate-400 dark:text-slate-500">
         Loading…
       </div>
     )

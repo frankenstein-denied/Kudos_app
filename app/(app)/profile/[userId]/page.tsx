@@ -48,33 +48,33 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
     }
   }
 
-  if (!profile) return <p className="text-center text-sm text-slate-400">Loading profile…</p>
+  if (!profile) return <p className="text-center text-sm text-slate-400 dark:text-slate-500">Loading profile…</p>
 
   return <div className="mx-auto max-w-3xl">
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
       <Avatar initials={initialsFrom(profile.name)} className="mx-auto size-20 text-lg" />
       <h1 className="mt-4 text-2xl font-bold">{profile.name}</h1>
-      <p className="text-sm text-slate-500">@{profile.username}</p>
-      {canView && profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600">{profile.bio}</p>}
+      <p className="text-sm text-slate-500 dark:text-slate-400">@{profile.username}</p>
+      {canView && profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600 dark:text-slate-300">{profile.bio}</p>}
       {canView && <div className="mt-5 flex justify-center gap-6 text-sm"><span><strong>{profile.friendsCount}</strong> Friends</span><span><strong>{profile.storiesCount}</strong> Stories</span></div>}
       {user?.uid !== userId && <div className="mt-5 flex flex-col items-center gap-2">
         <div className="flex justify-center gap-2">
           <button onClick={message} disabled={messaging} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{messaging ? 'Opening…' : 'Message'}</button>
-          {!canView && <button onClick={async () => { setRequesting(true); if (user) await sendFriendRequest(user.uid, userId); setRequesting(false) }} disabled={requesting} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold disabled:opacity-50">{requesting ? 'Sending…' : 'Add friend'}</button>}
+          {!canView && <button onClick={async () => { setRequesting(true); if (user) await sendFriendRequest(user.uid, userId); setRequesting(false) }} disabled={requesting} className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold disabled:opacity-50">{requesting ? 'Sending…' : 'Add friend'}</button>}
         </div>
-        {messageError && <p className="text-xs text-red-600">{messageError}</p>}
+        {messageError && <p className="text-xs text-red-600 dark:text-red-400">{messageError}</p>}
       </div>}
     </section>
     {canView ? (
       <div className="mt-8">
         <h2 className="mb-4 font-semibold">Stories</h2>
         <div className="flex flex-col gap-4">
-          {stories.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">No stories yet.</p>}
+          {stories.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-400 dark:text-slate-500">No stories yet.</p>}
           {stories.map(s => <StoryCard key={s.id} story={s} archived />)}
         </div>
       </div>
     ) : (
-      <p className="mt-8 rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">This profile is only visible to friends.</p>
+      <p className="mt-8 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-400 dark:text-slate-500">This profile is only visible to friends.</p>
     )}
   </div>
 }

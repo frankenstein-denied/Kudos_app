@@ -16,12 +16,12 @@ export default function ChatsPage() {
   }, [user])
 
   return <div>
-    <div className="mb-8"><p className="mb-2 text-sm font-medium text-blue-600">Stay connected</p><h1 className="text-3xl font-bold tracking-tight">Chats</h1><p className="mt-2 text-sm text-slate-500">Messages disappear after 24 hours.</p></div>
-    <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      {conversations.length === 0 && <p className="p-6 text-center text-sm text-slate-400">No conversations yet — message a friend from their profile.</p>}
-      {conversations.map(chat => <Link href={`/chats/${chat.id}`} key={chat.id} className="flex items-center gap-3 rounded-xl p-4 hover:bg-slate-50">
+    <div className="mb-8"><p className="mb-2 text-sm font-medium text-blue-600">Stay connected</p><h1 className="text-3xl font-bold tracking-tight">Chats</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Messages disappear after 24 hours.</p></div>
+    <div className="max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
+      {conversations.length === 0 && <p className="p-6 text-center text-sm text-slate-400 dark:text-slate-500">No conversations yet — message a friend from their profile.</p>}
+      {conversations.map(chat => <Link href={`/chats/${chat.id}`} key={chat.id} className="flex items-center gap-3 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800">
         <Avatar initials={initialsFrom(chat.otherProfile?.name || '?')} />
-        <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{chat.otherProfile?.name || 'Unknown'}</p><p className="truncate text-sm text-slate-500">{chat.lastMessage || 'Say hello 👋'}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{chat.otherProfile?.name || 'Unknown'}</p><p className="truncate text-sm text-slate-500 dark:text-slate-400">{chat.lastMessage || 'Say hello 👋'}</p></div>
       </Link>)}
     </div>
   </div>

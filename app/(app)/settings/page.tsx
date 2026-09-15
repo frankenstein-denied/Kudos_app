@@ -8,12 +8,13 @@ import { useAuth } from '@/lib/auth-context'
 import { useTheme, type ThemeSetting } from '@/lib/use-theme'
 import { deleteUserAccountData, updateUserProfile } from '@/lib/firestore'
 import { cn } from '@/lib/utils'
+import { InstallAppButton } from '@/components/pwa'
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm">
+  return <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-left text-sm">
     <span>{label}</span>
-    <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition', checked ? 'bg-blue-600' : 'bg-slate-200')}>
-      <span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow transition-all', checked ? 'left-5' : 'left-0.5')} />
+    <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition', checked ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700')}>
+      <span className={cn('absolute top-0.5 size-5 rounded-full bg-white dark:bg-slate-900 shadow transition-all', checked ? 'left-5' : 'left-0.5')} />
     </span>
   </button>
 }
@@ -74,26 +75,32 @@ export default function SettingsPage() {
   }
 
   return <div className="mx-auto max-w-2xl">
-    <div className="mb-8"><p className="mb-2 text-sm font-medium text-blue-600">Your preferences</p><h1 className="text-3xl font-bold tracking-tight">Settings</h1><p className="mt-2 text-sm text-slate-500">Make Kudos feel like yours.</p></div>
+    <div className="mb-8"><p className="mb-2 text-sm font-medium text-blue-600">Your preferences</p><h1 className="text-3xl font-bold tracking-tight">Settings</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Make Kudos feel like yours.</p></div>
     <div className="flex flex-col gap-5">
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <h2 className="font-semibold">Appearance</h2>
-        <p className="mt-1 text-sm text-slate-500">Choose how the app looks.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose how the app looks.</p>
         <div className="mt-4 flex gap-2">
-          {(['light', 'dark', 'system'] as ThemeSetting[]).map(t => <button key={t} onClick={() => setTheme(t)} className={cn('rounded-lg px-4 py-2 text-sm font-medium capitalize', theme === t ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-600')}>{t}</button>)}
+          {(['light', 'dark', 'system'] as ThemeSetting[]).map(t => <button key={t} onClick={() => setTheme(t)} className={cn('rounded-lg px-4 py-2 text-sm font-medium capitalize', theme === t ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300')}>{t}</button>)}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold">Account</h2>
-        <p className="mt-1 text-sm text-slate-500">Name, username, email, and password.</p>
-        <Link href="/profile" className="mt-4 inline-block rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Manage account</Link>
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+        <h2 className="font-semibold">App</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Install Kudos for a faster, full-screen experience.</p>
+        <div className="mt-4"><InstallAppButton /></div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+        <h2 className="font-semibold">Account</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Name, username, email, and password.</p>
+        <Link href="/profile" className="mt-4 inline-block rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm font-semibold">Manage account</Link>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <h2 className="font-semibold">Notifications</h2>
-        <p className="mt-1 text-sm text-slate-500">Messages, friend requests, and story reactions.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Messages, friend requests, and story reactions.</p>
         <div className="mt-4 flex flex-col gap-2">
           <Toggle checked={notifyMessages} onChange={v => saveNotify('notifyMessages', v, setNotifyMessages)} label="New messages" />
           <Toggle checked={notifyFriendRequests} onChange={v => saveNotify('notifyFriendRequests', v, setNotifyFriendRequests)} label="Friend requests" />
@@ -101,21 +108,21 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <h2 className="font-semibold">Privacy</h2>
-        <p className="mt-1 text-sm text-slate-500">Who can see your profile and stories.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Who can see your profile and stories.</p>
         <div className="mt-4 flex gap-2">
-          <button onClick={() => saveVisibility('everyone')} className={cn('rounded-lg px-4 py-2 text-sm font-medium', visibility === 'everyone' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-600')}>Everyone</button>
-          <button onClick={() => saveVisibility('friends')} className={cn('rounded-lg px-4 py-2 text-sm font-medium', visibility === 'friends' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-600')}>Friends only</button>
+          <button onClick={() => saveVisibility('everyone')} className={cn('rounded-lg px-4 py-2 text-sm font-medium', visibility === 'everyone' ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300')}>Everyone</button>
+          <button onClick={() => saveVisibility('friends')} className={cn('rounded-lg px-4 py-2 text-sm font-medium', visibility === 'friends' ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300')}>Friends only</button>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-red-100 bg-white p-5">
-        <h2 className="font-semibold text-red-600">Account actions</h2>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      <section className="rounded-2xl border border-red-100 dark:border-red-900 bg-white dark:bg-slate-900 p-5">
+        <h2 className="font-semibold text-red-600 dark:text-red-400">Account actions</h2>
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="mt-4 flex gap-3">
-          <button onClick={handleSignOut} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold">Sign out</button>
-          <button onClick={handleDeleteAccount} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600">Delete account</button>
+          <button onClick={handleSignOut} className="rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-semibold">Sign out</button>
+          <button onClick={handleDeleteAccount} className="rounded-lg border border-red-200 dark:border-red-800 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400">Delete account</button>
         </div>
       </section>
     </div>

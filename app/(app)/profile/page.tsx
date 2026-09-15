@@ -89,50 +89,50 @@ export default function ProfilePage() {
   if (!profile) return null
 
   return <div className="mx-auto max-w-3xl">
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
       <Avatar initials={initialsFrom(profile.name)} className="mx-auto size-20 text-lg" />
       {editing ? (
         <div className="mx-auto mt-4 flex max-w-sm flex-col gap-3">
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm" />
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2.5 text-center text-sm" />
           <div>
-            <div className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2.5">
-              <span className="text-sm text-slate-400">@</span>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2.5">
+              <span className="text-sm text-slate-400 dark:text-slate-500">@</span>
               <input value={username} onChange={e => setUsername(e.target.value)} placeholder="username" className="w-full text-sm outline-none" />
             </div>
-            {usernameStatus !== 'idle' && <p className={cn('mt-1 text-left text-xs', usernameStatus === 'available' && 'text-emerald-600', (usernameStatus === 'taken' || usernameStatus === 'invalid') && 'text-red-600', usernameStatus === 'checking' && 'text-slate-400')}>
+            {usernameStatus !== 'idle' && <p className={cn('mt-1 text-left text-xs', usernameStatus === 'available' && 'text-emerald-600 dark:text-emerald-400', (usernameStatus === 'taken' || usernameStatus === 'invalid') && 'text-red-600 dark:text-red-400', usernameStatus === 'checking' && 'text-slate-400 dark:text-slate-500')}>
               {usernameStatus === 'checking' && 'Checking availability…'}
               {usernameStatus === 'available' && 'Available'}
               {usernameStatus === 'taken' && 'Already taken'}
               {usernameStatus === 'invalid' && '3–20 characters: letters, numbers, underscore'}
             </p>}
           </div>
-          <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Bio" className="min-h-20 resize-none rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm" />
+          <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Bio" className="min-h-20 resize-none rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2.5 text-center text-sm" />
           <div className="flex justify-center gap-2">
             <button onClick={save} disabled={saving || usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking'} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
-            <button onClick={() => setEditing(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Cancel</button>
+            <button onClick={() => setEditing(false)} className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold">Cancel</button>
           </div>
-          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
         </div>
       ) : (
         <>
           <h1 className="mt-4 text-2xl font-bold">{profile.name}</h1>
-          <p className="text-sm text-slate-500">@{profile.username}</p>
-          {profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600">{profile.bio}</p>}
+          <p className="text-sm text-slate-500 dark:text-slate-400">@{profile.username}</p>
+          {profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600 dark:text-slate-300">{profile.bio}</p>}
           <div className="mt-5 flex justify-center gap-6 text-sm"><span><strong>{profile.friendsCount}</strong> Friends</span><span><strong>{profile.storiesCount}</strong> Stories</span></div>
-          <div className="mx-auto mt-5 flex max-w-xs items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-2">
-            <span className="min-w-0 flex-1 truncate text-left text-xs text-slate-500">{user?.uid}</span>
-            <button onClick={copyId} aria-label="Copy your unique ID" className="flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
-              {copied ? <><Check className="size-3.5 text-emerald-500" /> Copied</> : <><Copy className="size-3.5" /> Copy ID</>}
+          <div className="mx-auto mt-5 flex max-w-xs items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 py-2 pl-3 pr-2">
+            <span className="min-w-0 flex-1 truncate text-left text-xs text-slate-500 dark:text-slate-400">{user?.uid}</span>
+            <button onClick={copyId} aria-label="Copy your unique ID" className="flex shrink-0 items-center gap-1 rounded-lg bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-sm">
+              {copied ? <><Check className="size-3.5 text-emerald-500 dark:text-emerald-400" /> Copied</> : <><Copy className="size-3.5" /> Copy ID</>}
             </button>
           </div>
-          <button onClick={startEdit} className="mt-5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Edit profile</button>
+          <button onClick={startEdit} className="mt-5 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2 text-sm font-semibold">Edit profile</button>
         </>
       )}
     </section>
     <div className="mt-8">
       <h2 className="mb-4 font-semibold">Your stories</h2>
       <div className="flex flex-col gap-4">
-        {stories.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">You haven&apos;t shared a story yet.</p>}
+        {stories.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-400 dark:text-slate-500">You haven&apos;t shared a story yet.</p>}
         {stories.map(s => <StoryCard key={s.id} story={s} archived />)}
       </div>
     </div>
