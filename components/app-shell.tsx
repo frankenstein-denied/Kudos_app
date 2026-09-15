@@ -2,23 +2,27 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { Home, Sparkles, MessageCircle, Users, Hash, User, Settings, Menu, X, Moon, Sun, Bell } from 'lucide-react'
 import { cn, initialsFrom } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme } from '@/lib/use-theme'
 import { getLastSeen } from '@/lib/unread'
+import { MENTION_PATTERN } from '@/lib/mentions'
 import {
   REACTION_EMOJIS,
   REPLY_MAX_LENGTH,
   createStory,
+  markNotificationRead,
   reactToStory,
   replyToStory,
   subscribeConversations,
   subscribeIncomingRequests,
+  subscribeNotifications,
   subscribeStories,
   subscribeStoryReplies,
+  type AppNotification,
   type Conversation,
   type FriendRequest,
   type Story,
@@ -29,6 +33,7 @@ const nav = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
   { label: 'Stories', href: '/stories', icon: Sparkles },
   { label: 'Chats', href: '/chats', icon: MessageCircle },
+  { label: 'Communities', href: '/communities', icon: Hash },
   { label: 'Friends', href: '/friends', icon: Users },
   { label: 'Profile', href: '/profile', icon: User },
   { label: 'Settings', href: '/settings', icon: Settings },
@@ -38,8 +43,11 @@ export function Avatar({ initials, className }: { initials: string; className?: 
   return <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-xs font-bold text-blue-700 dark:text-blue-300', className)}>{initials}</div>
 }
 
+const NOTIFICATION_ICON = '/icon-192.png'
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
   const { user, profile } = useAuth()
@@ -48,6 +56,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [incoming, setIncoming] = useState<FriendRequest[]>([])
   const [latestStory, setLatestStory] = useState<Story | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const seenNotifIds = useRef<Set<string> | null>(null)
   const name = profile?.name || 'You'
   const username = profile?.username ? `@${profile.username}` : ''
   const initials = initialsFrom(name)
@@ -58,9 +68,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       subscribeIncomingRequests(user.uid, setIncoming),
       subscribeStories(stories => setLatestStory(stories[0] ?? null)),
       subscribeConversations(user.uid, setConversations),
+      subscribeNotifications(user.uid, setNotifications),
     ]
     return () => unsubs.forEach(u => u())
   }, [user])
+
+  // Fire an actual OS/browser notification for anything new and unread —
+  // "new" meaning not present the previous time this ran, so it only fires
+  // once per notification and never replays the whole backlog on mount.
+  useEffect(() => {
+    const isFirstRun = seenNotifIds.current === null
+    const prevIds = seenNotifIds.current ?? new Set<string>()
+    seenNotifIds.current = new Set(notifications.map(n => n.id))
+    if (isFirstRun) return
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return
+    if (Notification.permission !== 'granted') return
+    if (document.visibilityState === 'visible') return
+    for (const n of notifications) {
+      if (n.read || prevIds.has(n.id)) continue
+      const title = n.type === 'message' ? `${n.actorName} sent you a message`
+        : n.type === 'mention' ? `${n.actorName} mentioned you`
+        : `${n.actorName} replied to your story`
+      try {
+        const notif = new Notification(title, { body: n.text, icon: NOTIFICATION_ICON, tag: n.id })
+        notif.onclick = () => { window.focus(); router.push(n.link) }
+      } catch {}
+    }
+  }, [notifications, router])
+
+  async function openNotification(n: AppNotification) {
+    setNotifOpen(false)
+    if (!n.read) await markNotificationRead(n.id)
+    router.push(n.link)
+  }
+
+  const unreadNotifCount = notifications.filter(n => !n.read).length
 
   const badges = {
     '/stories': Boolean(latestStory?.createdAt && latestStory.createdAt.toMillis() > getLastSeen('stories')),
@@ -80,12 +122,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </aside>
     <div className="lg:pl-64"><header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-5 backdrop-blur md:px-8"><button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 lg:hidden"><Menu className="size-5" /></button><div className="hidden text-sm font-medium text-slate-500 dark:text-slate-400 lg:block">Make space for good things.</div><div className="ml-auto flex items-center gap-2">
       <div className="relative">
-        <button aria-label="Notifications" onClick={() => setNotifOpen(o => !o)} className="relative rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"><Bell className="size-5" />{incoming.length > 0 && <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-blue-600" />}</button>
-        {notifOpen && <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-lg">
-          <p className="mb-2 px-1 text-xs font-semibold text-slate-400 dark:text-slate-500">Friend requests</p>
-          {incoming.length === 0
+        <button aria-label="Notifications" onClick={() => setNotifOpen(o => !o)} className="relative rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"><Bell className="size-5" />{(incoming.length > 0 || unreadNotifCount > 0) && <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-blue-600" />}</button>
+        {notifOpen && <div className="absolute right-0 top-full z-30 mt-2 w-80 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-lg">
+          {incoming.length === 0 && notifications.length === 0
             ? <p className="px-1 py-4 text-center text-sm text-slate-400 dark:text-slate-500">You&apos;re all caught up.</p>
-            : <div className="flex flex-col gap-1">{incoming.map(r => <Link key={r.id} href="/friends" onClick={() => setNotifOpen(false)} className="rounded-xl px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"><strong>{r.profile?.name || 'Someone'}</strong> sent you a friend request</Link>)}</div>}
+            : <div className="flex flex-col gap-1">
+              {incoming.map(r => <Link key={`fr-${r.id}`} href="/friends" onClick={() => setNotifOpen(false)} className="rounded-xl px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"><strong>{r.profile?.name || 'Someone'}</strong> sent you a friend request</Link>)}
+              {notifications.map(n => <button key={n.id} onClick={() => openNotification(n)} className={cn('flex flex-col items-start gap-0.5 rounded-xl px-2 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800', !n.read && 'bg-blue-50/60 dark:bg-blue-950/30')}>
+                <span>
+                  <strong>{n.actorName}</strong>{' '}
+                  {n.type === 'message' ? 'sent you a message' : n.type === 'mention' ? 'mentioned you' : 'replied to your story'}
+                </span>
+                {n.text && <span className="truncate text-xs text-slate-400 dark:text-slate-500">{n.text}</span>}
+              </button>)}
+            </div>}
         </div>}
       </div>
       <button aria-label="Toggle dark mode" onClick={toggle} className="rounded-lg p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">{theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}</button>
@@ -124,7 +174,7 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
     if (!replyText.trim() || !user) return
     setSending(true)
     try {
-      await replyToStory(story.id, user, profile?.name || 'You', replyText)
+      await replyToStory(story.id, story.authorId, user, profile?.name || 'You', replyText)
       setReplyText('')
     } finally {
       setSending(false)
@@ -133,7 +183,7 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
 
   return <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
     <div className="flex items-start gap-3"><Link href={`/profile/${story.authorId}`} className="shrink-0"><Avatar initials={story.initials} /></Link><div className="min-w-0"><Link href={`/profile/${story.authorId}`} className="text-sm font-semibold hover:underline">{story.authorName}</Link><p className="text-xs text-slate-400 dark:text-slate-500">{time}</p></div><span className="ml-auto rounded-full bg-blue-50 dark:bg-blue-950 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">{story.emoji} {story.category}</span></div>
-    <p className="mt-5 text-[15px] leading-7 text-slate-700 dark:text-slate-200">{story.text}</p>
+    <p className="mt-5 text-[15px] leading-7 text-slate-700 dark:text-slate-200">{renderWithMentions(story.text)}</p>
     <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">{REACTION_EMOJIS.map((emoji, i) => <button key={emoji} disabled={archived || reacted} onClick={() => react(i)} className={cn('rounded-lg bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 disabled:cursor-default disabled:opacity-80', reacted && 'opacity-80')}>{emoji} {story.reactions[i]}</button>)}</div>
     <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
       <button onClick={() => setShowReplies(v => !v)} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-blue-600">
@@ -142,7 +192,7 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
       {showReplies && <div className="mt-3 flex flex-col gap-2">
         {replies.map(r => <div key={r.id} className="flex items-start gap-2">
           <Avatar initials={r.initials} className="size-7 text-[10px]" />
-          <div className="min-w-0 flex-1 rounded-xl bg-slate-50 dark:bg-slate-800 px-3 py-2"><p className="text-xs font-semibold">{r.authorName}</p><p className="text-sm text-slate-700 dark:text-slate-200">{r.text}</p></div>
+          <div className="min-w-0 flex-1 rounded-xl bg-slate-50 dark:bg-slate-800 px-3 py-2"><p className="text-xs font-semibold">{r.authorName}</p><p className="text-sm text-slate-700 dark:text-slate-200">{renderWithMentions(r.text)}</p></div>
         </div>)}
         <div className="flex items-center gap-2">
           <input value={replyText} onChange={e => setReplyText(e.target.value.slice(0, REPLY_MAX_LENGTH))} onKeyDown={e => { if (e.key === 'Enter') sendReply() }} placeholder="Write a reply…" className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm outline-none focus:border-blue-400" />
@@ -179,7 +229,23 @@ export function StoryComposer({ onClose }: { onClose?: () => void }) {
       setPosting(false)
     }
   }
-  return <div className="rounded-2xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Write a story</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A small update for your circle, disappearing after 24 hours.</p></div>{onClose && <button onClick={onClose} className="text-sm font-medium text-slate-500 dark:text-slate-400">Cancel</button>}</div><select value={category} onChange={e => setCategory(e.target.value)} className="mb-3 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">{categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}</select><textarea value={text} onChange={e => setText(e.target.value.slice(0, 500))} placeholder="What happened?" className="min-h-28 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900" /><div className="mt-2 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500"><span>Keep it kind and real.</span><span>{text.length}/500</span></div><button onClick={post} disabled={!text.trim() || posting} className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{posting ? 'Posting…' : 'Post Story'}</button></div>
+  return <div className="rounded-2xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Write a story</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A small update for your circle, disappearing after 24 hours.</p></div>{onClose && <button onClick={onClose} className="text-sm font-medium text-slate-500 dark:text-slate-400">Cancel</button>}</div><select value={category} onChange={e => setCategory(e.target.value)} className="mb-3 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">{categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}</select><textarea value={text} onChange={e => setText(e.target.value.slice(0, 500))} placeholder="What happened?" className="min-h-28 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900" /><div className="mt-2 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500"><span>Keep it kind and real. Use @username to mention someone.</span><span>{text.length}/500</span></div><button onClick={post} disabled={!text.trim() || posting} className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{posting ? 'Posting…' : 'Post Story'}</button></div>
+}
+
+function renderWithMentions(text: string): React.ReactNode {
+  const re = new RegExp(MENTION_PATTERN)
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = re.exec(text))) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+    const handle = match[1]
+    parts.push(<Link key={key++} href={`/u/${handle.toLowerCase()}`} className="font-semibold text-blue-600 hover:underline">@{handle}</Link>)
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+  return parts
 }
 
 function timeAgo(ms: number) {

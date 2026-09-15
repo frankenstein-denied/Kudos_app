@@ -12,7 +12,7 @@ const QUICK_EMOJIS = ['😊', '😂', '❤️', '🎉', '🔥', '👏', '🙏', 
 
 export default function ConversationPage({ params }: { params: Promise<{ conversationId: string }> }) {
   const { conversationId } = use(params)
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [text, setText] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [other, setOther] = useState<UserProfile | null>(null)
@@ -65,7 +65,7 @@ export default function ConversationPage({ params }: { params: Promise<{ convers
     if (!text.trim() || !user) return
     const value = text.trim()
     setText('')
-    await sendMessage(conversationId, user.uid, value)
+    await sendMessage(conversationId, user.uid, profile?.name || 'You', value)
   }
 
   return <div className="mx-auto max-w-3xl">

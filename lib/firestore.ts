@@ -1,5 +1,7 @@
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -20,6 +22,7 @@ import {
 import type { User } from 'firebase/auth'
 import { db } from '@/lib/firebase'
 import { initialsFrom } from '@/lib/utils'
+import { extractMentions } from '@/lib/mentions'
 
 // ---------- Users ----------
 
@@ -34,6 +37,8 @@ export type UserProfile = {
   notifyMessages: boolean
   notifyFriendRequests: boolean
   notifyReactions: boolean
+  notifyMentions: boolean
+  notifyReplies: boolean
   profileVisibility: 'everyone' | 'friends'
 }
 
@@ -120,6 +125,8 @@ export async function ensureUserProfile(user: User) {
     notifyMessages: true,
     notifyFriendRequests: true,
     notifyReactions: true,
+    notifyMentions: true,
+    notifyReplies: true,
     profileVisibility: 'everyone',
     createdAt: serverTimestamp(),
   })
@@ -140,13 +147,15 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     notifyMessages: data.notifyMessages ?? true,
     notifyFriendRequests: data.notifyFriendRequests ?? true,
     notifyReactions: data.notifyReactions ?? true,
+    notifyMentions: data.notifyMentions ?? true,
+    notifyReplies: data.notifyReplies ?? true,
     profileVisibility: data.profileVisibility ?? 'everyone',
   }
 }
 
 export async function updateUserProfile(
   uid: string,
-  data: Partial<Pick<UserProfile, 'name' | 'bio' | 'photoURL' | 'notifyMessages' | 'notifyFriendRequests' | 'notifyReactions' | 'profileVisibility'>>,
+  data: Partial<Pick<UserProfile, 'name' | 'bio' | 'photoURL' | 'notifyMessages' | 'notifyFriendRequests' | 'notifyReactions' | 'notifyMentions' | 'notifyReplies' | 'profileVisibility'>>,
 ) {
   await updateDoc(doc(db, 'users', uid), data)
 }
@@ -176,6 +185,72 @@ export async function deleteUserAccountData(uid: string) {
     ...(profile?.username ? [deleteDoc(doc(db, 'usernames', profile.username))] : []),
   ])
   await deleteDoc(doc(db, 'users', uid))
+}
+
+// ---------- Notifications ----------
+
+export type NotificationType = 'message' | 'mention' | 'reply'
+
+export type AppNotification = {
+  id: string
+  userId: string
+  type: NotificationType
+  actorName: string
+  text: string
+  link: string
+  createdAt: Timestamp | null
+  read: boolean
+}
+
+export function subscribeNotifications(userId: string, cb: (notifications: AppNotification[]) => void) {
+  // No orderBy — see subscribeUserStories for why (equality filter +
+  // orderBy on a different field needs a composite index). Sort client-side.
+  const q = query(collection(db, 'notifications'), where('userId', '==', userId))
+  return onSnapshot(q, (snap) => {
+    const rows = snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        userId: data.userId,
+        type: data.type,
+        actorName: data.actorName,
+        text: data.text,
+        link: data.link,
+        createdAt: data.createdAt ?? null,
+        read: data.read ?? false,
+      } as AppNotification
+    })
+    rows.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+    cb(rows.slice(0, 30))
+  })
+}
+
+export async function createNotification(userId: string, type: NotificationType, actorName: string, text: string, link: string) {
+  const recipient = await getUserProfile(userId)
+  if (recipient) {
+    if (type === 'message' && !recipient.notifyMessages) return
+    if (type === 'mention' && !recipient.notifyMentions) return
+    if (type === 'reply' && !recipient.notifyReplies) return
+  }
+  await addDoc(collection(db, 'notifications'), { userId, type, actorName, text, link, createdAt: serverTimestamp(), read: false })
+}
+
+export async function markNotificationRead(id: string) {
+  await updateDoc(doc(db, 'notifications', id), { read: true })
+}
+
+export async function resolveUsernameToUid(username: string): Promise<string | null> {
+  const snap = await getDoc(doc(db, 'usernames', username.toLowerCase()))
+  return snap.exists() ? (snap.data().uid as string) : null
+}
+
+async function notifyMentions(text: string, actorUid: string, actorName: string, link: string, excludeUids: Set<string> = new Set()) {
+  const handles = extractMentions(text)
+  if (handles.length === 0) return
+  const uids = await Promise.all(handles.map((h) => resolveUsernameToUid(h)))
+  const validUids = uids.filter((u): u is string => Boolean(u))
+  const targets = new Set(validUids.filter((u) => u !== actorUid && !excludeUids.has(u)))
+  await Promise.all([...targets].map((uid) => createNotification(uid, 'mention', actorName, 'mentioned you', link)))
 }
 
 // ---------- Stories ----------
@@ -263,6 +338,7 @@ export async function createStory(user: User, authorName: string, category: stri
     reactions: {},
   })
   await updateDoc(doc(db, 'users', user.uid), { storiesCount: increment(1) })
+  await notifyMentions(text, user.uid, authorName, '/stories')
 }
 
 export async function reactToStory(storyId: string, reactionIndex: number) {
@@ -285,7 +361,7 @@ export function subscribeStoryReplies(storyId: string, cb: (replies: StoryReply[
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toStoryReply(d.id, d.data()))))
 }
 
-export async function replyToStory(storyId: string, user: User, authorName: string, text: string) {
+export async function replyToStory(storyId: string, storyAuthorId: string, user: User, authorName: string, text: string) {
   const trimmed = text.trim().slice(0, REPLY_MAX_LENGTH)
   if (!trimmed) return
   await addDoc(collection(db, 'stories', storyId, 'replies'), {
@@ -296,6 +372,13 @@ export async function replyToStory(storyId: string, user: User, authorName: stri
     createdAt: serverTimestamp(),
   })
   await updateDoc(doc(db, 'stories', storyId), { repliesCount: increment(1) })
+
+  const mentionExcludes = new Set<string>()
+  if (storyAuthorId !== user.uid) {
+    await createNotification(storyAuthorId, 'reply', authorName, 'replied to your story', '/stories')
+    mentionExcludes.add(storyAuthorId)
+  }
+  await notifyMentions(trimmed, user.uid, authorName, '/stories', mentionExcludes)
 }
 
 // ---------- Friends ----------
@@ -451,7 +534,79 @@ export function subscribeMessages(convId: string, cb: (messages: Message[]) => v
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Message, 'id'>) }))))
 }
 
-export async function sendMessage(convId: string, senderId: string, text: string) {
+export async function sendMessage(convId: string, senderId: string, senderName: string, text: string) {
   await addDoc(collection(db, 'conversations', convId, 'messages'), { senderId, text, createdAt: serverTimestamp() })
   await updateDoc(doc(db, 'conversations', convId), { lastMessage: text, lastMessageSenderId: senderId, updatedAt: serverTimestamp() })
+  const otherUid = convId.split('_').find((id) => id !== senderId)
+  if (otherUid) await createNotification(otherUid, 'message', senderName, text.slice(0, 80), `/chats/${convId}`)
+}
+
+// ---------- Communities (group chats) ----------
+// Any member can add or remove any other member — no admin-only
+// restriction, matching how this feature was requested.
+
+export type Community = {
+  id: string
+  name: string
+  description: string
+  ownerId: string
+  memberIds: string[]
+  createdAt: Timestamp | null
+}
+
+function toCommunity(id: string, data: any): Community {
+  return {
+    id,
+    name: data.name ?? '',
+    description: data.description ?? '',
+    ownerId: data.ownerId,
+    memberIds: data.memberIds ?? [],
+    createdAt: data.createdAt ?? null,
+  }
+}
+
+export function subscribeCommunities(uid: string, cb: (communities: Community[]) => void) {
+  const q = query(collection(db, 'communities'), where('memberIds', 'array-contains', uid))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toCommunity(d.id, d.data()))))
+}
+
+export async function getCommunity(communityId: string): Promise<Community | null> {
+  const snap = await getDoc(doc(db, 'communities', communityId))
+  return snap.exists() ? toCommunity(snap.id, snap.data()) : null
+}
+
+export function subscribeCommunity(communityId: string, cb: (community: Community | null) => void) {
+  return onSnapshot(doc(db, 'communities', communityId), (snap) => cb(snap.exists() ? toCommunity(snap.id, snap.data()) : null))
+}
+
+export async function createCommunity(ownerId: string, name: string, description: string): Promise<string> {
+  const ref = await addDoc(collection(db, 'communities'), {
+    name: name.trim().slice(0, 60),
+    description: description.trim().slice(0, 200),
+    ownerId,
+    memberIds: [ownerId],
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function addCommunityMember(communityId: string, uid: string) {
+  await updateDoc(doc(db, 'communities', communityId), { memberIds: arrayUnion(uid) })
+}
+
+export async function removeCommunityMember(communityId: string, uid: string) {
+  await updateDoc(doc(db, 'communities', communityId), { memberIds: arrayRemove(uid) })
+}
+
+export type CommunityMessage = { id: string; senderId: string; senderName: string; text: string; createdAt: Timestamp | null }
+
+export function subscribeCommunityMessages(communityId: string, cb: (messages: CommunityMessage[]) => void) {
+  const q = query(collection(db, 'communities', communityId, 'messages'), orderBy('createdAt', 'asc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CommunityMessage, 'id'>) }))))
+}
+
+export async function sendCommunityMessage(communityId: string, senderId: string, senderName: string, text: string) {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  await addDoc(collection(db, 'communities', communityId, 'messages'), { senderId, senderName, text: trimmed, createdAt: serverTimestamp() })
 }

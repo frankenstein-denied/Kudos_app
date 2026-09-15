@@ -28,17 +28,32 @@ export default function SettingsPage() {
   const [notifyMessages, setNotifyMessages] = useState(true)
   const [notifyFriendRequests, setNotifyFriendRequests] = useState(true)
   const [notifyReactions, setNotifyReactions] = useState(true)
+  const [notifyMentions, setNotifyMentions] = useState(true)
+  const [notifyReplies, setNotifyReplies] = useState(true)
   const [visibility, setVisibility] = useState<'everyone' | 'friends'>('everyone')
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default')
 
   useEffect(() => {
     if (!profile) return
     setNotifyMessages(profile.notifyMessages)
     setNotifyFriendRequests(profile.notifyFriendRequests)
     setNotifyReactions(profile.notifyReactions)
+    setNotifyMentions(profile.notifyMentions)
+    setNotifyReplies(profile.notifyReplies)
     setVisibility(profile.profileVisibility)
   }, [profile])
 
-  async function saveNotify(field: 'notifyMessages' | 'notifyFriendRequests' | 'notifyReactions', value: boolean, setLocal: (v: boolean) => void) {
+  useEffect(() => {
+    setPushPermission(typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported')
+  }, [])
+
+  async function enablePush() {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    const result = await Notification.requestPermission()
+    setPushPermission(result)
+  }
+
+  async function saveNotify(field: 'notifyMessages' | 'notifyFriendRequests' | 'notifyReactions' | 'notifyMentions' | 'notifyReplies', value: boolean, setLocal: (v: boolean) => void) {
     setLocal(value)
     if (!user) return
     await updateUserProfile(user.uid, { [field]: value })
@@ -100,11 +115,20 @@ export default function SettingsPage() {
 
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <h2 className="font-semibold">Notifications</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Messages, friend requests, and story reactions.</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Messages, mentions, replies, friend requests, and story reactions.</p>
         <div className="mt-4 flex flex-col gap-2">
           <Toggle checked={notifyMessages} onChange={v => saveNotify('notifyMessages', v, setNotifyMessages)} label="New messages" />
+          <Toggle checked={notifyMentions} onChange={v => saveNotify('notifyMentions', v, setNotifyMentions)} label="Mentions (@you)" />
+          <Toggle checked={notifyReplies} onChange={v => saveNotify('notifyReplies', v, setNotifyReplies)} label="Replies to your stories" />
           <Toggle checked={notifyFriendRequests} onChange={v => saveNotify('notifyFriendRequests', v, setNotifyFriendRequests)} label="Friend requests" />
           <Toggle checked={notifyReactions} onChange={v => saveNotify('notifyReactions', v, setNotifyReactions)} label="Story reactions" />
+        </div>
+        <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+          <p className="text-sm font-medium">Browser notifications</p>
+          {pushPermission === 'unsupported' && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Not supported in this browser.</p>}
+          {pushPermission === 'granted' && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Enabled — you&apos;ll get a browser notification when the app is in the background.</p>}
+          {pushPermission === 'denied' && <p className="mt-1 text-xs text-red-600 dark:text-red-400">Blocked — enable notifications for this site in your browser settings to turn this back on.</p>}
+          {pushPermission === 'default' && <button onClick={enablePush} className="mt-2 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-xs font-semibold">Enable browser notifications</button>}
         </div>
       </section>
 

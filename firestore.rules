@@ -60,6 +60,33 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid in resource.data.users;
     }
 
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      // Created by any signed-in user (e.g. the sender of a message or
+      // mention) on behalf of the recipient — there's no other party who
+      // could write it, since the actor isn't the recipient.
+      allow create: if signedIn();
+      allow update: if signedIn() && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /communities/{communityId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if signedIn() && request.auth.uid in request.resource.data.memberIds && request.resource.data.ownerId == request.auth.uid;
+      // Anyone already a member may add or remove any other member —
+      // deliberately no admin-only restriction, per how this was requested.
+      allow update: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.memberIds;
+        allow create: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.memberIds
+          && request.resource.data.senderId == request.auth.uid;
+      }
+    }
+
     match /conversations/{conversationId} {
       // getOrCreateConversation() checks existence with getDoc() before creating —
       // resource is null for a conversation that doesn't exist yet, so the get
