@@ -42,11 +42,8 @@ export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#f7faff] dark:bg-slate-950 text-slate-900 dark:text-slate-50">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8">
-        <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-            <Heart className="size-5 fill-current" />
-          </span>
-          <span className="text-xl font-bold tracking-tight">kudos</span>
+        <Link href="/">
+          <Image src="/icon-192.png" alt="Kudos" width={40} height={40} className="size-10" priority />
         </Link>
         <nav className="flex items-center gap-3 text-sm font-medium">
           <Link href="/login" className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100">Log in</Link>
