@@ -30,6 +30,10 @@ export type UserProfile = {
   photoURL: string
   friendsCount: number
   storiesCount: number
+  notifyMessages: boolean
+  notifyFriendRequests: boolean
+  notifyReactions: boolean
+  profileVisibility: 'everyone' | 'friends'
 }
 
 export async function ensureUserProfile(user: User) {
@@ -44,6 +48,10 @@ export async function ensureUserProfile(user: User) {
     photoURL: user.photoURL || '',
     friendsCount: 0,
     storiesCount: 0,
+    notifyMessages: true,
+    notifyFriendRequests: true,
+    notifyReactions: true,
+    profileVisibility: 'everyone',
     createdAt: serverTimestamp(),
   })
 }
@@ -60,11 +68,24 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     photoURL: data.photoURL ?? '',
     friendsCount: data.friendsCount ?? 0,
     storiesCount: data.storiesCount ?? 0,
+    notifyMessages: data.notifyMessages ?? true,
+    notifyFriendRequests: data.notifyFriendRequests ?? true,
+    notifyReactions: data.notifyReactions ?? true,
+    profileVisibility: data.profileVisibility ?? 'everyone',
   }
 }
 
-export async function updateUserProfile(uid: string, data: Partial<Pick<UserProfile, 'name' | 'bio' | 'photoURL'>>) {
+export async function updateUserProfile(
+  uid: string,
+  data: Partial<Pick<UserProfile, 'name' | 'bio' | 'photoURL' | 'notifyMessages' | 'notifyFriendRequests' | 'notifyReactions' | 'profileVisibility'>>,
+) {
   await updateDoc(doc(db, 'users', uid), data)
+}
+
+export async function isFriendWith(uidA: string, uidB: string): Promise<boolean> {
+  if (uidA === uidB) return true
+  const snap = await getDoc(doc(db, 'friendships', friendshipId(uidA, uidB)))
+  return snap.exists()
 }
 
 // ---------- Stories ----------

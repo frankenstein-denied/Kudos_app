@@ -1,10 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Avatar } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
 import {
   acceptFriendRequest,
   declineFriendRequest,
+  getOrCreateConversation,
   sendFriendRequest,
   subscribeFriends,
   subscribeIncomingRequests,
@@ -19,11 +21,20 @@ const tabs = ['Friends', 'Requests', 'Sent', 'Suggestions']
 
 export default function FriendsPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [tab, setTab] = useState('Friends')
   const [friends, setFriends] = useState<UserProfile[]>([])
   const [incoming, setIncoming] = useState<FriendRequest[]>([])
   const [sent, setSent] = useState<FriendRequest[]>([])
   const [suggestions, setSuggestions] = useState<UserProfile[]>([])
+  const [messaging, setMessaging] = useState<string | null>(null)
+
+  async function message(otherUid: string) {
+    if (!user) return
+    setMessaging(otherUid)
+    const convId = await getOrCreateConversation(user.uid, otherUid)
+    router.push(`/chats/${convId}`)
+  }
 
   useEffect(() => {
     if (!user) return
@@ -47,7 +58,11 @@ export default function FriendsPage() {
       {tabs.map(t => <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'}`}>{t}{t === 'Requests' && incoming.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-1.5 text-xs text-blue-700">{incoming.length}</span>}</button>)}
     </div>
 
-    {tab === 'Friends' && <PeopleGrid empty="No friends yet." people={friends.map(f => ({ uid: f.uid, name: f.name, action: <a href={`/chats`} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">Message</a> }))} />}
+    {tab === 'Friends' && <PeopleGrid empty="No friends yet." people={friends.map(f => ({
+      uid: f.uid,
+      name: f.name,
+      action: <button onClick={() => message(f.uid)} disabled={messaging === f.uid} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">{messaging === f.uid ? 'Opening…' : 'Message'}</button>,
+    }))} />}
 
     {tab === 'Requests' && <PeopleGrid empty="No pending requests." people={incoming.map(r => ({
       uid: r.id,
@@ -58,7 +73,11 @@ export default function FriendsPage() {
       </div>,
     }))} />}
 
-    {tab === 'Sent' && <PeopleGrid empty="No pending sent requests." people={sent.map(r => ({ uid: r.id, name: r.profile?.name || 'Unknown', action: <span className="text-xs font-semibold text-slate-400">Pending</span> }))} />}
+    {tab === 'Sent' && <PeopleGrid empty="No pending sent requests." people={sent.map(r => ({
+      uid: r.id,
+      name: r.profile?.name || 'Unknown',
+      action: <button onClick={() => declineFriendRequest(r.id)} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">Cancel</button>,
+    }))} />}
 
     {tab === 'Suggestions' && <PeopleGrid empty="No suggestions right now." people={suggestions.map(p => ({
       uid: p.uid,

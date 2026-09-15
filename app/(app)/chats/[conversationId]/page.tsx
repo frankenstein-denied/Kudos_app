@@ -7,12 +7,15 @@ import { useAuth } from '@/lib/auth-context'
 import { getUserProfile, sendMessage, subscribeMessages, type Message, type UserProfile } from '@/lib/firestore'
 import { cn, initialsFrom } from '@/lib/utils'
 
+const QUICK_EMOJIS = ['😊', '😂', '❤️', '🎉', '🔥', '👏', '🙏', '😢', '👍', '🤔']
+
 export default function ConversationPage({ params }: { params: Promise<{ conversationId: string }> }) {
   const { conversationId } = use(params)
   const { user } = useAuth()
   const [text, setText] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [other, setOther] = useState<UserProfile | null>(null)
+  const [showEmoji, setShowEmoji] = useState(false)
 
   useEffect(() => {
     const otherUid = conversationId.split('_').find(id => id !== user?.uid)
@@ -37,8 +40,11 @@ export default function ConversationPage({ params }: { params: Promise<{ convers
         {messages.map(message => <div key={message.id} className={cn(message.senderId === user?.uid ? 'self-end rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm text-white' : 'max-w-[80%] self-start rounded-2xl rounded-bl-md bg-slate-100 px-4 py-3 text-sm text-slate-700')}>{message.text}</div>)}
       </div>
       <p className="px-5 pb-2 text-center text-xs text-slate-400">Messages disappear after 24 hours</p>
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-slate-100 p-3">
-        <button type="button" aria-label="Open emoji picker" className="rounded-lg p-2 text-slate-400 hover:bg-slate-50"><Smile className="size-5" /></button>
+      <form onSubmit={submit} className="relative flex items-center gap-2 border-t border-slate-100 p-3">
+        {showEmoji && <div className="absolute bottom-full left-3 mb-2 flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+          {QUICK_EMOJIS.map(emoji => <button key={emoji} type="button" onClick={() => { setText(t => t + emoji); setShowEmoji(false) }} className="rounded-lg p-1.5 text-lg hover:bg-slate-50">{emoji}</button>)}
+        </div>}
+        <button type="button" aria-label="Open emoji picker" onClick={() => setShowEmoji(v => !v)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-50"><Smile className="size-5" /></button>
         <input value={text} onChange={e => setText(e.target.value)} placeholder="Type a message..." className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-100" />
         <button aria-label="Send message" className="flex size-10 items-center justify-center rounded-xl bg-blue-600 text-white"><Send className="size-4" /></button>
       </form>

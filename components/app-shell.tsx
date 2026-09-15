@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Bell } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell } from 'lucide-react'
 import { cn, initialsFrom } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
-import { REACTION_EMOJIS, createStory, reactToStory, type Story } from '@/lib/firestore'
+import { useTheme } from '@/lib/use-theme'
+import { REACTION_EMOJIS, createStory, reactToStory, subscribeIncomingRequests, type FriendRequest, type Story } from '@/lib/firestore'
 
 const nav = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
@@ -25,10 +26,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
+  const { theme, toggle } = useTheme()
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [incoming, setIncoming] = useState<FriendRequest[]>([])
   const name = profile?.name || 'You'
   const username = profile?.username ? `@${profile.username}` : ''
   const initials = initialsFrom(name)
+
+  useEffect(() => {
+    if (!user) return
+    return subscribeIncomingRequests(user.uid, setIncoming)
+  }, [user])
+
   return <div className="min-h-screen bg-[#f7faff] text-slate-900">
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-white px-5 py-6 lg:flex">
       <Link href="/dashboard" className="mb-10 flex items-center gap-2.5 px-2"><span className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200"><Heart className="size-5 fill-current" /></span><span className="text-xl font-bold tracking-tight">kudos</span></Link>
@@ -39,7 +49,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-white px-5 py-6 shadow-xl transition-transform lg:hidden', open ? 'translate-x-0' : '-translate-x-full')}>
       <div className="mb-8 flex items-center justify-between"><Link href="/dashboard" onClick={close} className="flex items-center gap-2.5"><span className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white"><Heart className="size-5 fill-current" /></span><span className="text-xl font-bold">kudos</span></Link><button aria-label="Close menu" onClick={close} className="rounded-lg p-2 text-slate-400"><X className="size-5" /></button></div><Nav pathname={pathname} onNavigate={close} />
     </aside>
-    <div className="lg:pl-64"><header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur md:px-8"><button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50 lg:hidden"><Menu className="size-5" /></button><div className="hidden text-sm font-medium text-slate-500 lg:block">Make space for good things.</div><div className="ml-auto flex items-center gap-2"><button aria-label="Notifications" className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-50"><Bell className="size-5" /></button><button aria-label="Toggle dark mode" className="rounded-lg p-2 text-slate-400 hover:bg-slate-50"><Moon className="size-4" /></button><Link href="/profile"><Avatar initials={initials} className="size-8" /></Link></div></header><main className="mx-auto max-w-6xl px-5 py-8 pb-24 md:px-8">{children}</main></div>
+    <div className="lg:pl-64"><header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur md:px-8"><button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50 lg:hidden"><Menu className="size-5" /></button><div className="hidden text-sm font-medium text-slate-500 lg:block">Make space for good things.</div><div className="ml-auto flex items-center gap-2">
+      <div className="relative">
+        <button aria-label="Notifications" onClick={() => setNotifOpen(o => !o)} className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-50"><Bell className="size-5" />{incoming.length > 0 && <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-blue-600" />}</button>
+        {notifOpen && <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg">
+          <p className="mb-2 px-1 text-xs font-semibold text-slate-400">Friend requests</p>
+          {incoming.length === 0
+            ? <p className="px-1 py-4 text-center text-sm text-slate-400">You&apos;re all caught up.</p>
+            : <div className="flex flex-col gap-1">{incoming.map(r => <Link key={r.id} href="/friends" onClick={() => setNotifOpen(false)} className="rounded-xl px-2 py-2 text-sm hover:bg-slate-50"><strong>{r.profile?.name || 'Someone'}</strong> sent you a friend request</Link>)}</div>}
+        </div>}
+      </div>
+      <button aria-label="Toggle dark mode" onClick={toggle} className="rounded-lg p-2 text-slate-400 hover:bg-slate-50">{theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}</button>
+      <Link href="/profile"><Avatar initials={initials} className="size-8" /></Link>
+    </div></header><main className="mx-auto max-w-6xl px-5 py-8 pb-24 md:px-8">{children}</main></div>
   </div>
 }
 
