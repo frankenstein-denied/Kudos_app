@@ -8,6 +8,7 @@ import { Heart, Sparkles, MessageCircle, Users, Gift, Star } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { signInWithGoogle } from '@/lib/google-auth'
 import { GoogleIcon } from '@/components/google-icon'
+import { InAppBrowserBanner } from '@/components/in-app-browser-banner'
 
 const features = [
   { icon: Sparkles, title: '24-hour Stories', desc: 'Share the small wins and honest moments — they fade after a day, so nothing has to be perfect.' },
@@ -67,6 +68,7 @@ export default function LandingPage() {
         </p>
 
         <div className="mt-10 w-full max-w-sm">
+          <InAppBrowserBanner />
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}

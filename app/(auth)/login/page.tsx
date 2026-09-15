@@ -7,6 +7,7 @@ import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth-context'
 import { signInWithGoogle } from '@/lib/google-auth'
 import { GoogleIcon } from '@/components/google-icon'
+import { InAppBrowserBanner } from '@/components/in-app-browser-banner'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -49,6 +50,7 @@ export default function LoginPage() {
   return <main className="flex min-h-screen items-center justify-center bg-[#f7faff] dark:bg-slate-950 p-5">
     <div className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 shadow-sm">
       <div className="mb-8 text-center"><h1 className="text-2xl font-bold">Welcome back to Kudos</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">A little kindness goes a long way.</p></div>
+      <InAppBrowserBanner />
       <button onClick={google} disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-60">
         <GoogleIcon className="size-5" /> Continue with Google
       </button>
