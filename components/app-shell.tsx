@@ -10,13 +10,17 @@ import { useAuth } from '@/lib/auth-context'
 import { useTheme } from '@/lib/use-theme'
 import { getLastSeen } from '@/lib/unread'
 import { MENTION_PATTERN } from '@/lib/mentions'
+import type { User as FirebaseUser } from 'firebase/auth'
 import {
   REACTION_EMOJIS,
   REPLY_MAX_LENGTH,
   createStory,
+  getFriends,
   markNotificationRead,
   reactToStory,
   replyToStory,
+  searchUsersByPrefix,
+  sortFriendsFirst,
   subscribeConversations,
   subscribeIncomingRequests,
   subscribeNotifications,
@@ -27,6 +31,7 @@ import {
   type FriendRequest,
   type Story,
   type StoryReply,
+  type UserProfile,
 } from '@/lib/firestore'
 
 const nav = [
@@ -150,6 +155,63 @@ function Nav({ pathname, onNavigate, badges }: { pathname: string; onNavigate: (
 
 export const categories = ['All', 'Rant', 'Achievement', 'Appreciation', 'Celebration', 'Sad', 'Funny', 'Thought', 'Gratitude', 'Goal', 'Random']
 
+function detectMentionTrigger(text: string, cursor: number): { start: number; query: string } | null {
+  const uptoCursor = text.slice(0, cursor)
+  const match = /(?:^|\s)@([a-z0-9_]{0,20})$/i.exec(uptoCursor)
+  if (!match) return null
+  const start = match[0].charAt(0) === '@' ? match.index : match.index + 1
+  return { start, query: match[1] }
+}
+
+function useMentionAutocomplete(user: FirebaseUser | null) {
+  const friendsCache = useRef<UserProfile[] | null>(null)
+  const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null)
+  const [suggestions, setSuggestions] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(false)
+
+  function onCursorMove(text: string, cursor: number) {
+    setTrigger(detectMentionTrigger(text, cursor))
+  }
+
+  useEffect(() => {
+    if (!trigger || !user) {
+      setSuggestions([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      if (!friendsCache.current) friendsCache.current = await getFriends(user.uid)
+      if (cancelled) return
+      const friendList = friendsCache.current
+      const results = trigger.query ? await searchUsersByPrefix(trigger.query, user.uid, 8) : friendList.slice(0, 8)
+      if (!cancelled) {
+        setSuggestions(sortFriendsFirst(results, new Set(friendList.map((f) => f.uid))))
+        setLoading(false)
+      }
+    }, 200)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [trigger, user])
+
+  return { trigger, suggestions, loading, onCursorMove, close: () => setTrigger(null) }
+}
+
+function MentionDropdown({ suggestions, loading, onSelect }: { suggestions: UserProfile[]; loading: boolean; onSelect: (u: UserProfile) => void }) {
+  if (!loading && suggestions.length === 0) return null
+  return <div className="absolute z-20 mt-1 max-h-48 w-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1 shadow-lg">
+    {loading && suggestions.length === 0 && <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">Searching…</p>}
+    {suggestions.map((u) => (
+      <button key={u.uid} type="button" onMouseDown={(e) => { e.preventDefault(); onSelect(u) }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800">
+        <Avatar initials={initialsFrom(u.name)} className="size-6 text-[10px]" />
+        <span className="min-w-0 flex-1 truncate text-sm">{u.name} <span className="text-xs text-slate-400 dark:text-slate-500">@{u.username}</span></span>
+      </button>
+    ))}
+  </div>
+}
+
 export function StoryCard({ story, archived = false }: { story: Story; archived?: boolean }) {
   const { user, profile } = useAuth()
   const [reacted, setReacted] = useState(false)
@@ -158,6 +220,8 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
   const time = story.createdAt ? timeAgo(story.createdAt.toMillis()) : 'just now'
+  const replyInputRef = useRef<HTMLInputElement>(null)
+  const replyMention = useMentionAutocomplete(user)
 
   async function react(i: number) {
     if (reacted || archived) return
@@ -181,6 +245,27 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
     }
   }
 
+  function handleReplyChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value.slice(0, REPLY_MAX_LENGTH)
+    setReplyText(value)
+    replyMention.onCursorMove(value, e.target.selectionStart ?? value.length)
+  }
+
+  function selectReplyMention(u: UserProfile) {
+    if (!replyMention.trigger) return
+    const { start } = replyMention.trigger
+    const cursor = replyInputRef.current?.selectionStart ?? replyText.length
+    const inserted = `@${u.username} `
+    const next = (replyText.slice(0, start) + inserted + replyText.slice(cursor)).slice(0, REPLY_MAX_LENGTH)
+    setReplyText(next)
+    replyMention.close()
+    requestAnimationFrame(() => {
+      const pos = start + inserted.length
+      replyInputRef.current?.focus()
+      replyInputRef.current?.setSelectionRange(pos, pos)
+    })
+  }
+
   return <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
     <div className="flex items-start gap-3"><Link href={`/profile/${story.authorId}`} className="shrink-0"><Avatar initials={story.initials} /></Link><div className="min-w-0"><Link href={`/profile/${story.authorId}`} className="text-sm font-semibold hover:underline">{story.authorName}</Link><p className="text-xs text-slate-400 dark:text-slate-500">{time}</p></div><span className="ml-auto rounded-full bg-blue-50 dark:bg-blue-950 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">{story.emoji} {story.category}</span></div>
     <p className="mt-5 text-[15px] leading-7 text-slate-700 dark:text-slate-200">{renderWithMentions(story.text)}</p>
@@ -194,9 +279,29 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
           <Avatar initials={r.initials} className="size-7 text-[10px]" />
           <div className="min-w-0 flex-1 rounded-xl bg-slate-50 dark:bg-slate-800 px-3 py-2"><p className="text-xs font-semibold">{r.authorName}</p><p className="text-sm text-slate-700 dark:text-slate-200">{renderWithMentions(r.text)}</p></div>
         </div>)}
-        <div className="flex items-center gap-2">
-          <input value={replyText} onChange={e => setReplyText(e.target.value.slice(0, REPLY_MAX_LENGTH))} onKeyDown={e => { if (e.key === 'Enter') sendReply() }} placeholder="Write a reply…" className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm outline-none focus:border-blue-400" />
+        <div className="relative flex items-center gap-2">
+          <input
+            ref={replyInputRef}
+            value={replyText}
+            onChange={handleReplyChange}
+            onKeyUp={e => replyMention.onCursorMove(replyText, e.currentTarget.selectionStart ?? replyText.length)}
+            onClick={e => replyMention.onCursorMove(replyText, e.currentTarget.selectionStart ?? replyText.length)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                if (replyMention.trigger && replyMention.suggestions.length > 0) {
+                  e.preventDefault()
+                  selectReplyMention(replyMention.suggestions[0])
+                } else {
+                  sendReply()
+                }
+              }
+              if (e.key === 'Escape') replyMention.close()
+            }}
+            placeholder="Write a reply… (@ to mention)"
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm outline-none focus:border-blue-400"
+          />
           <button onClick={sendReply} disabled={!replyText.trim() || sending} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{sending ? '…' : 'Send'}</button>
+          {replyMention.trigger && <MentionDropdown suggestions={replyMention.suggestions} loading={replyMention.loading} onSelect={selectReplyMention} />}
         </div>
         <p className="text-right text-[11px] text-slate-400 dark:text-slate-500">{replyText.length}/{REPLY_MAX_LENGTH}</p>
       </div>}
@@ -218,6 +323,9 @@ export function StoryComposer({ onClose }: { onClose?: () => void }) {
   const [text, setText] = useState('')
   const [category, setCategory] = useState('Achievement')
   const [posting, setPosting] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mention = useMentionAutocomplete(user)
+
   async function post() {
     if (!text.trim() || !user) return
     setPosting(true)
@@ -229,7 +337,53 @@ export function StoryComposer({ onClose }: { onClose?: () => void }) {
       setPosting(false)
     }
   }
-  return <div className="rounded-2xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Write a story</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A small update for your circle, disappearing after 24 hours.</p></div>{onClose && <button onClick={onClose} className="text-sm font-medium text-slate-500 dark:text-slate-400">Cancel</button>}</div><select value={category} onChange={e => setCategory(e.target.value)} className="mb-3 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">{categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}</select><textarea value={text} onChange={e => setText(e.target.value.slice(0, 500))} placeholder="What happened?" className="min-h-28 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900" /><div className="mt-2 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500"><span>Keep it kind and real. Use @username to mention someone.</span><span>{text.length}/500</span></div><button onClick={post} disabled={!text.trim() || posting} className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{posting ? 'Posting…' : 'Post Story'}</button></div>
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value.slice(0, 500)
+    setText(value)
+    mention.onCursorMove(value, e.target.selectionStart ?? value.length)
+  }
+
+  function selectMention(u: UserProfile) {
+    if (!mention.trigger) return
+    const { start } = mention.trigger
+    const cursor = textareaRef.current?.selectionStart ?? text.length
+    const inserted = `@${u.username} `
+    const next = (text.slice(0, start) + inserted + text.slice(cursor)).slice(0, 500)
+    setText(next)
+    mention.close()
+    requestAnimationFrame(() => {
+      const pos = start + inserted.length
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(pos, pos)
+    })
+  }
+
+  return <div className="rounded-2xl border border-blue-100 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 p-5">
+    <div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Write a story</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A small update for your circle, disappearing after 24 hours.</p></div>{onClose && <button onClick={onClose} className="text-sm font-medium text-slate-500 dark:text-slate-400">Cancel</button>}</div>
+    <select value={category} onChange={e => setCategory(e.target.value)} className="mb-3 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">{categories.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}</select>
+    <div className="relative">
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={handleChange}
+        onKeyUp={e => mention.onCursorMove(text, e.currentTarget.selectionStart ?? text.length)}
+        onClick={e => mention.onCursorMove(text, e.currentTarget.selectionStart ?? text.length)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && mention.trigger && mention.suggestions.length > 0) {
+            e.preventDefault()
+            selectMention(mention.suggestions[0])
+          }
+          if (e.key === 'Escape') mention.close()
+        }}
+        placeholder="What happened? Use @ to mention someone."
+        className="min-h-28 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900"
+      />
+      {mention.trigger && <MentionDropdown suggestions={mention.suggestions} loading={mention.loading} onSelect={selectMention} />}
+    </div>
+    <div className="mt-2 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500"><span>Keep it kind and real. Use @username to mention someone.</span><span>{text.length}/500</span></div>
+    <button onClick={post} disabled={!text.trim() || posting} className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{posting ? 'Posting…' : 'Post Story'}</button>
+  </div>
 }
 
 function renderWithMentions(text: string): React.ReactNode {

@@ -82,10 +82,12 @@ export default function ProfilePage() {
       await refreshProfile()
       setEditing(false)
     } catch (err) {
+      const code = (err as { code?: string })?.code
+      console.error('Profile save failed:', err)
       setSaveError(
-        (err as { code?: string })?.code === 'permission-denied'
+        code === 'permission-denied'
           ? "Couldn't save — permission denied. Try signing out and back in."
-          : 'Could not save your profile. Please try again.',
+          : `Could not save your profile${code ? ` (${code})` : ''}. Please try again.`,
       )
     } finally {
       setSaving(false)

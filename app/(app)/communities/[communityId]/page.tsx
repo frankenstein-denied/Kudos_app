@@ -6,10 +6,12 @@ import { Avatar } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
 import {
   addCommunityMember,
-  findUserByIdOrUsername,
+  getFriends,
   getUserProfile,
   removeCommunityMember,
+  searchUsersByPrefix,
   sendCommunityMessage,
+  sortFriendsFirst,
   subscribeCommunity,
   subscribeCommunityMessages,
   type Community,
@@ -28,9 +30,10 @@ export default function CommunityPage({ params }: { params: Promise<{ communityI
   const [showMembers, setShowMembers] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [searchResult, setSearchResult] = useState<UserProfile | null>(null)
-  const [searchError, setSearchError] = useState('')
+  const [results, setResults] = useState<UserProfile[]>([])
+  const [adding, setAdding] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const friendsCache = useRef<UserProfile[] | null>(null)
 
   useEffect(() => subscribeCommunity(communityId, setCommunity), [communityId])
   useEffect(() => subscribeCommunityMessages(communityId, setMessages), [communityId])
@@ -55,25 +58,31 @@ export default function CommunityPage({ params }: { params: Promise<{ communityI
     await sendCommunityMessage(communityId, user.uid, profile?.name || 'You', value)
   }
 
-  async function search(e: React.FormEvent) {
-    e.preventDefault()
-    if (!query.trim()) return
-    setSearching(true)
-    setSearchError('')
-    setSearchResult(null)
-    const result = await findUserByIdOrUsername(query)
-    setSearching(false)
-    if (!result) {
-      setSearchError('No one found with that ID or username.')
+useEffect(() => {
+    if (!query.trim() || !user) {
+      setResults([])
+      setSearching(false)
       return
     }
-    setSearchResult(result)
-  }
+    let cancelled = false
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      if (!friendsCache.current) friendsCache.current = await getFriends(user.uid)
+      const matches = await searchUsersByPrefix(query, user.uid, 8)
+      if (cancelled) return
+      setResults(sortFriendsFirst(matches, new Set(friendsCache.current.map(f => f.uid))))
+      setSearching(false)
+    }, 250)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, user])
 
   async function addMember(uid: string) {
-    await addCommunityMember(communityId, uid)
-    setSearchResult(null)
-    setQuery('')
+    setAdding(uid)
+    try {
+      await addCommunityMember(communityId, uid)
+    } finally {
+      setAdding(null)
+    }
   }
 
   async function kickMember(uid: string) {
@@ -98,17 +107,20 @@ export default function CommunityPage({ params }: { params: Promise<{ communityI
         </header>
 
         {showMembers && <div className="border-b border-slate-100 dark:border-slate-800 p-4">
-          <form onSubmit={search} className="mb-3 flex gap-2">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Add by unique ID or @username" className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm" />
-            <button disabled={searching || !query.trim()} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Search className="size-3.5" /> Search</button>
-          </form>
-          {searchError && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{searchError}</p>}
-          {searchResult && <div className="mb-3 flex items-center gap-2 rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/40 p-2.5">
-            <Avatar initials={initialsFrom(searchResult.name)} className="size-8" />
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold">{searchResult.name}</p>
-            {community.memberIds.includes(searchResult.uid)
-              ? <span className="text-xs text-slate-400 dark:text-slate-500">Already in</span>
-              : <button onClick={() => addMember(searchResult.uid)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">Add</button>}
+          <div className="relative mb-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type a name or @username to add someone…" className="w-full rounded-xl border border-slate-200 dark:border-slate-800 py-2 pl-8 pr-3 text-sm" />
+          </div>
+          {query.trim() && <div className="mb-3 flex flex-col gap-1">
+            {searching && results.length === 0 && <p className="px-1 py-2 text-xs text-slate-400 dark:text-slate-500">Searching…</p>}
+            {!searching && results.length === 0 && <p className="px-1 py-2 text-xs text-slate-400 dark:text-slate-500">No one found.</p>}
+            {results.map(r => <div key={r.uid} className="flex items-center gap-2 rounded-xl border border-slate-100 dark:border-slate-800 p-2">
+              <Avatar initials={initialsFrom(r.name)} className="size-8" />
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{r.name}</p><p className="text-xs text-slate-400 dark:text-slate-500">@{r.username}</p></div>
+              {community.memberIds.includes(r.uid)
+                ? <span className="text-xs text-slate-400 dark:text-slate-500">Already in</span>
+                : <button onClick={() => addMember(r.uid)} disabled={adding === r.uid} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{adding === r.uid ? 'Adding…' : 'Add'}</button>}
+            </div>)}
           </div>}
           <div className="flex flex-col gap-2">
             {members.map(m => <div key={m.uid} className="flex items-center gap-2">

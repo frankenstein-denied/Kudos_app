@@ -9,6 +9,7 @@ import {
   getDoc,
   getDocs,
   increment,
+  limit as fsLimit,
   onSnapshot,
   orderBy,
   query,
@@ -470,6 +471,13 @@ export function subscribeFriends(uid: string, cb: (friends: UserProfile[]) => vo
   })
 }
 
+export async function getFriends(uid: string): Promise<UserProfile[]> {
+  const snap = await getDocs(query(collection(db, 'friendships'), where('users', 'array-contains', uid)))
+  const otherUids = snap.docs.map((d) => (d.data().users as string[]).find((u) => u !== uid)!).filter(Boolean)
+  const profiles = await profilesFor(otherUids)
+  return otherUids.map((u) => profiles.get(u)).filter((p): p is UserProfile => Boolean(p))
+}
+
 export async function findUserByIdOrUsername(query_: string): Promise<UserProfile | null> {
   const trimmed = query_.trim().replace(/^@/, '')
   if (!trimmed) return null
@@ -487,6 +495,30 @@ export async function suggestFriends(uid: string, exclude: Set<string>, max = 8)
     .map((d) => ({ uid: d.id, ...(d.data() as Omit<UserProfile, 'uid'>) }))
     .filter((p) => !exclude.has(p.uid))
     .slice(0, max)
+}
+
+// Prefix match on @username, for live autocomplete (mentions, adding
+// people to a community). A single-field range query (>= prefix, < prefix
+// + high-codepoint sentinel) needs no composite index.
+export async function searchUsersByPrefix(prefix: string, excludeUid: string, max = 8): Promise<UserProfile[]> {
+  const p = prefix.trim().toLowerCase().replace(/^@/, '')
+  if (!p) return []
+  const snap = await getDocs(
+    query(collection(db, 'users'), where('username', '>=', p), where('username', '<', p + ''), fsLimit(max + 1)),
+  )
+  return snap.docs
+    .map((d) => ({ uid: d.id, ...(d.data() as Omit<UserProfile, 'uid'>) }))
+    .filter((u) => u.uid !== excludeUid)
+    .slice(0, max)
+}
+
+export function sortFriendsFirst(users: UserProfile[], friendUids: Set<string>): UserProfile[] {
+  return [...users].sort((a, b) => {
+    const af = friendUids.has(a.uid) ? 0 : 1
+    const bf = friendUids.has(b.uid) ? 0 : 1
+    if (af !== bf) return af - bf
+    return a.username.localeCompare(b.username)
+  })
 }
 
 // ---------- Conversations ----------
