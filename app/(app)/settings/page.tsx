@@ -6,7 +6,7 @@ import { deleteUser, signOut } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme, type ThemeSetting } from '@/lib/use-theme'
-import { updateUserProfile } from '@/lib/firestore'
+import { deleteUserAccountData, updateUserProfile } from '@/lib/firestore'
 import { cn } from '@/lib/utils'
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
@@ -60,10 +60,16 @@ export default function SettingsPage() {
     if (!user) return
     if (!confirm('Delete your account? This cannot be undone.')) return
     try {
+      // Clean up Firestore data first, while the session is still valid —
+      // deleteUser() below ends the session immediately on success.
+      await deleteUserAccountData(user.uid)
       await deleteUser(user)
       router.push('/')
-    } catch {
-      setError('Please sign out and back in recently, then try deleting your account again.')
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code
+      setError(code === 'auth/requires-recent-login'
+        ? 'For security, please sign out and back in, then try deleting your account again.'
+        : 'Something went wrong deleting your account. Please try again.')
     }
   }
 

@@ -9,7 +9,20 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == uid;
-      allow update: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && (
+        request.auth.uid == uid ||
+        // Another user may bump ONLY this user's friendsCount, and only once a
+        // friendship between the two of them already exists (created in the
+        // same accept-request flow, just before this update runs).
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendsCount']) &&
+          (
+            exists(/databases/$(database)/documents/friendships/$(uid + '_' + request.auth.uid)) ||
+            exists(/databases/$(database)/documents/friendships/$(request.auth.uid + '_' + uid))
+          )
+        )
+      );
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     match /stories/{storyId} {
@@ -28,10 +41,16 @@ service cloud.firestore {
     match /friendships/{friendshipId} {
       allow read: if signedIn() && request.auth.uid in resource.data.users;
       allow create: if signedIn() && request.auth.uid in request.resource.data.users;
+      allow delete: if signedIn() && request.auth.uid in resource.data.users;
     }
 
     match /conversations/{conversationId} {
-      allow read, update: if signedIn() && request.auth.uid in resource.data.participantIds;
+      // getOrCreateConversation() checks existence with getDoc() before creating —
+      // resource is null for a conversation that doesn't exist yet, so the get
+      // must be allowed in that case too, or the existence check itself is denied.
+      allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.participantIds);
+      allow list: if signedIn();
+      allow update: if signedIn() && request.auth.uid in resource.data.participantIds;
       allow create: if signedIn() && request.auth.uid in request.resource.data.participantIds;
 
       match /messages/{messageId} {

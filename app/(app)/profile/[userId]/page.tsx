@@ -13,6 +13,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [stories, setStories] = useState<Story[]>([])
   const [messaging, setMessaging] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [canView, setCanView] = useState(true)
   const [requesting, setRequesting] = useState(false)
 
@@ -37,8 +38,14 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
   async function message() {
     if (!user) return
     setMessaging(true)
-    const convId = await getOrCreateConversation(user.uid, userId)
-    router.push(`/chats/${convId}`)
+    setMessageError('')
+    try {
+      const convId = await getOrCreateConversation(user.uid, userId)
+      router.push(`/chats/${convId}`)
+    } catch {
+      setMessageError('Could not open that conversation. Please try again.')
+      setMessaging(false)
+    }
   }
 
   if (!profile) return <p className="text-center text-sm text-slate-400">Loading profile…</p>
@@ -50,9 +57,12 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
       <p className="text-sm text-slate-500">@{profile.username}</p>
       {canView && profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600">{profile.bio}</p>}
       {canView && <div className="mt-5 flex justify-center gap-6 text-sm"><span><strong>{profile.friendsCount}</strong> Friends</span><span><strong>{profile.storiesCount}</strong> Stories</span></div>}
-      {user?.uid !== userId && <div className="mt-5 flex justify-center gap-2">
-        <button onClick={message} disabled={messaging} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{messaging ? 'Opening…' : 'Message'}</button>
-        {!canView && <button onClick={async () => { setRequesting(true); if (user) await sendFriendRequest(user.uid, userId); setRequesting(false) }} disabled={requesting} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold disabled:opacity-50">{requesting ? 'Sending…' : 'Add friend'}</button>}
+      {user?.uid !== userId && <div className="mt-5 flex flex-col items-center gap-2">
+        <div className="flex justify-center gap-2">
+          <button onClick={message} disabled={messaging} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{messaging ? 'Opening…' : 'Message'}</button>
+          {!canView && <button onClick={async () => { setRequesting(true); if (user) await sendFriendRequest(user.uid, userId); setRequesting(false) }} disabled={requesting} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold disabled:opacity-50">{requesting ? 'Sending…' : 'Add friend'}</button>}
+        </div>
+        {messageError && <p className="text-xs text-red-600">{messageError}</p>}
       </div>}
     </section>
     {canView ? (

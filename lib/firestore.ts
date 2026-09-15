@@ -88,6 +88,25 @@ export async function isFriendWith(uidA: string, uidB: string): Promise<boolean>
   return snap.exists()
 }
 
+// Cleans up a user's Firestore data. Must run BEFORE firebase/auth's
+// deleteUser() — once that succeeds the session is gone and these writes
+// would fail auth checks, leaving the data orphaned with no way to retry.
+export async function deleteUserAccountData(uid: string) {
+  const [storiesSnap, friendshipsSnap, sentSnap, incomingSnap] = await Promise.all([
+    getDocs(query(collection(db, 'stories'), where('authorId', '==', uid))),
+    getDocs(query(collection(db, 'friendships'), where('users', 'array-contains', uid))),
+    getDocs(query(collection(db, 'friend_requests'), where('fromUid', '==', uid))),
+    getDocs(query(collection(db, 'friend_requests'), where('toUid', '==', uid))),
+  ])
+  await Promise.all([
+    ...storiesSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...friendshipsSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...sentSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...incomingSnap.docs.map((d) => deleteDoc(d.ref)),
+  ])
+  await deleteDoc(doc(db, 'users', uid))
+}
+
 // ---------- Stories ----------
 
 export const REACTION_EMOJIS = ['😊', '🎉', '💙', '🤩', '🌟']
