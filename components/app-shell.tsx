@@ -136,12 +136,10 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
   </article>
 }
 
-export function StoryRow({ stories, archived = false }: { stories: Story[]; archived?: boolean }) {
+export function StoryList({ stories, archived = false }: { stories: Story[]; archived?: boolean }) {
   if (stories.length === 0) return null
-  return <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-    {stories.map(story => <div key={story.id} className="w-[85%] shrink-0 snap-start sm:w-[420px]">
-      <StoryCard story={story} archived={archived} />
-    </div>)}
+  return <div className="flex flex-col gap-4">
+    {stories.map(story => <StoryCard key={story.id} story={story} archived={archived} />)}
   </div>
 }
 
