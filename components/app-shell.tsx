@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn, initialsFrom } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme } from '@/lib/use-theme'
@@ -80,6 +80,54 @@ export function StoryCard({ story, archived = false }: { story: Story; archived?
     await reactToStory(story.id, i)
   }
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Avatar initials={story.initials} /><div className="min-w-0"><p className="text-sm font-semibold">{story.authorName}</p><p className="text-xs text-slate-400">{time}</p></div><span className="ml-auto rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{story.emoji} {story.category}</span></div><p className="mt-5 text-[15px] leading-7 text-slate-700">{story.text}</p><div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">{REACTION_EMOJIS.map((emoji, i) => <button key={emoji} disabled={archived || reacted} onClick={() => react(i)} className={cn('rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500 hover:bg-blue-50 disabled:cursor-default disabled:opacity-80', reacted && 'opacity-80')}>{emoji} {story.reactions[i]}</button>)}</div></article>
+}
+
+export function StoryCarousel({ stories, archived = false }: { stories: Story[]; archived?: boolean }) {
+  const [index, setIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+
+  if (stories.length === 0) return null
+
+  const safeIndex = ((index % stories.length) + stories.length) % stories.length
+  const current = stories[safeIndex]
+  const next = () => setIndex(i => i + 1)
+  const prev = () => setIndex(i => i - 1)
+
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    if (delta > 50) prev()
+    else if (delta < -50) next()
+    touchStartX.current = null
+  }
+
+  return <div
+    role="region"
+    aria-roledescription="carousel"
+    aria-label="Stories"
+    tabIndex={0}
+    onKeyDown={e => { if (e.key === 'ArrowRight') next(); if (e.key === 'ArrowLeft') prev() }}
+    onTouchStart={onTouchStart}
+    onTouchEnd={onTouchEnd}
+    className="outline-none"
+  >
+    <div key={current.id} className="animate-in fade-in slide-in-from-right-3 duration-300">
+      <StoryCard story={current} archived={archived} />
+    </div>
+    {stories.length > 1 && <>
+      <div className="mt-4 flex items-center justify-center gap-4">
+        <button aria-label="Previous story" onClick={prev} className="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><ChevronLeft className="size-4" /></button>
+        <span className="text-xs font-medium text-slate-400">{safeIndex + 1} / {stories.length}</span>
+        <button aria-label="Next story" onClick={next} className="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><ChevronRight className="size-4" /></button>
+      </div>
+      {stories.length <= 8 && <div className="mt-3 flex justify-center gap-1.5">
+        {stories.map((s, i) => <button key={s.id} aria-label={`Go to story ${i + 1}`} onClick={() => setIndex(i)} className={cn('h-1.5 rounded-full transition-all', i === safeIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-slate-200')} />)}
+      </div>}
+    </>}
+  </div>
 }
 
 export function CategoryFilter({ selected, onSelect }: { selected: string; onSelect: (category: string) => void }) { return <div className="flex gap-2 overflow-x-auto pb-1">{categories.map(category => <button key={category} onClick={() => onSelect(category)} className={cn('shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition', selected === category ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-700')}>{category}</button>)}</div> }

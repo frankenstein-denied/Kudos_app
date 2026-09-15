@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { CategoryFilter, StoryCard, StoryComposer } from '@/components/app-shell'
+import { CategoryFilter, StoryCarousel, StoryComposer } from '@/components/app-shell'
 import { subscribeStories, type Story } from '@/lib/firestore'
 
 export default function StoriesPage() {
@@ -20,9 +20,10 @@ export default function StoriesPage() {
     </div>
     {compose && <div className="mb-6"><StoryComposer onClose={() => setCompose(false)} /></div>}
     <CategoryFilter selected={category} onSelect={setCategory} />
-    <div className="mt-5 flex flex-col gap-4">
-      {filtered.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">Nothing here yet.</p>}
-      {filtered.map(story => <StoryCard key={story.id} story={story} />)}
+    <div className="mt-5">
+      {filtered.length === 0
+        ? <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">Nothing here yet.</p>
+        : <StoryCarousel key={category} stories={filtered} />}
     </div>
   </div>
 }

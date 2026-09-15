@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { CategoryFilter, StoryCard, StoryComposer, Avatar } from '@/components/app-shell'
+import { CategoryFilter, StoryCarousel, StoryComposer, Avatar } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
 import { subscribeStories, type Story } from '@/lib/firestore'
 import { initialsFrom } from '@/lib/utils'
@@ -30,9 +30,10 @@ export default function DashboardPage() {
       <Link href="/stories" className="text-sm font-semibold text-blue-600">View all</Link>
     </div>
     <CategoryFilter selected={category} onSelect={setCategory} />
-    <div className="mt-4 flex flex-col gap-4">
-      {filtered.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">No stories yet — be the first to share something.</p>}
-      {filtered.map(story => <StoryCard key={story.id} story={story} />)}
+    <div className="mt-4">
+      {filtered.length === 0
+        ? <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">No stories yet — be the first to share something.</p>
+        : <StoryCarousel key={category} stories={filtered} />}
     </div>
   </div>
 }
