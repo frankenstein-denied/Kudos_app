@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { CategoryFilter, StoryCarousel, StoryComposer, Avatar } from '@/components/app-shell'
+import { CategoryFilter, StoryRow, StoryComposer, Avatar } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
 import { subscribeStories, type Story } from '@/lib/firestore'
 import { initialsFrom } from '@/lib/utils'
@@ -33,7 +33,7 @@ export default function DashboardPage() {
     <div className="mt-4">
       {filtered.length === 0
         ? <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">No stories yet — be the first to share something.</p>
-        : <StoryCarousel key={category} stories={filtered} />}
+        : <StoryRow key={category} stories={filtered} />}
     </div>
   </div>
 }

@@ -2,12 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
-import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Heart, Home, Sparkles, MessageCircle, Users, User, Settings, Menu, X, Moon, Sun, Bell } from 'lucide-react'
 import { cn, initialsFrom } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme } from '@/lib/use-theme'
-import { REACTION_EMOJIS, createStory, reactToStory, subscribeIncomingRequests, type FriendRequest, type Story } from '@/lib/firestore'
+import {
+  REACTION_EMOJIS,
+  REPLY_MAX_LENGTH,
+  createStory,
+  reactToStory,
+  replyToStory,
+  subscribeIncomingRequests,
+  subscribeStoryReplies,
+  type FriendRequest,
+  type Story,
+  type StoryReply,
+} from '@/lib/firestore'
 
 const nav = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
@@ -72,61 +83,65 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate: () => voi
 export const categories = ['All', 'Rant', 'Achievement', 'Appreciation', 'Celebration', 'Sad', 'Funny', 'Thought', 'Gratitude', 'Goal', 'Random']
 
 export function StoryCard({ story, archived = false }: { story: Story; archived?: boolean }) {
+  const { user, profile } = useAuth()
   const [reacted, setReacted] = useState(false)
+  const [showReplies, setShowReplies] = useState(false)
+  const [replies, setReplies] = useState<StoryReply[]>([])
+  const [replyText, setReplyText] = useState('')
+  const [sending, setSending] = useState(false)
   const time = story.createdAt ? timeAgo(story.createdAt.toMillis()) : 'just now'
+
   async function react(i: number) {
     if (reacted || archived) return
     setReacted(true)
     await reactToStory(story.id, i)
   }
-  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Avatar initials={story.initials} /><div className="min-w-0"><p className="text-sm font-semibold">{story.authorName}</p><p className="text-xs text-slate-400">{time}</p></div><span className="ml-auto rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{story.emoji} {story.category}</span></div><p className="mt-5 text-[15px] leading-7 text-slate-700">{story.text}</p><div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">{REACTION_EMOJIS.map((emoji, i) => <button key={emoji} disabled={archived || reacted} onClick={() => react(i)} className={cn('rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500 hover:bg-blue-50 disabled:cursor-default disabled:opacity-80', reacted && 'opacity-80')}>{emoji} {story.reactions[i]}</button>)}</div></article>
+
+  useEffect(() => {
+    if (!showReplies) return
+    return subscribeStoryReplies(story.id, setReplies)
+  }, [showReplies, story.id])
+
+  async function sendReply() {
+    if (!replyText.trim() || !user) return
+    setSending(true)
+    try {
+      await replyToStory(story.id, user, profile?.name || 'You', replyText)
+      setReplyText('')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-start gap-3"><Avatar initials={story.initials} /><div className="min-w-0"><p className="text-sm font-semibold">{story.authorName}</p><p className="text-xs text-slate-400">{time}</p></div><span className="ml-auto rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">{story.emoji} {story.category}</span></div>
+    <p className="mt-5 text-[15px] leading-7 text-slate-700">{story.text}</p>
+    <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">{REACTION_EMOJIS.map((emoji, i) => <button key={emoji} disabled={archived || reacted} onClick={() => react(i)} className={cn('rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500 hover:bg-blue-50 disabled:cursor-default disabled:opacity-80', reacted && 'opacity-80')}>{emoji} {story.reactions[i]}</button>)}</div>
+    <div className="mt-3 border-t border-slate-100 pt-3">
+      <button onClick={() => setShowReplies(v => !v)} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600">
+        <MessageCircle className="size-3.5" /> {story.repliesCount > 0 ? `${story.repliesCount} ${story.repliesCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
+      </button>
+      {showReplies && <div className="mt-3 flex flex-col gap-2">
+        {replies.map(r => <div key={r.id} className="flex items-start gap-2">
+          <Avatar initials={r.initials} className="size-7 text-[10px]" />
+          <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-3 py-2"><p className="text-xs font-semibold">{r.authorName}</p><p className="text-sm text-slate-700">{r.text}</p></div>
+        </div>)}
+        <div className="flex items-center gap-2">
+          <input value={replyText} onChange={e => setReplyText(e.target.value.slice(0, REPLY_MAX_LENGTH))} onKeyDown={e => { if (e.key === 'Enter') sendReply() }} placeholder="Write a reply…" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400" />
+          <button onClick={sendReply} disabled={!replyText.trim() || sending} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{sending ? '…' : 'Send'}</button>
+        </div>
+        <p className="text-right text-[11px] text-slate-400">{replyText.length}/{REPLY_MAX_LENGTH}</p>
+      </div>}
+    </div>
+  </article>
 }
 
-export function StoryCarousel({ stories, archived = false }: { stories: Story[]; archived?: boolean }) {
-  const [index, setIndex] = useState(0)
-  const touchStartX = useRef<number | null>(null)
-
+export function StoryRow({ stories, archived = false }: { stories: Story[]; archived?: boolean }) {
   if (stories.length === 0) return null
-
-  const safeIndex = ((index % stories.length) + stories.length) % stories.length
-  const current = stories[safeIndex]
-  const next = () => setIndex(i => i + 1)
-  const prev = () => setIndex(i => i - 1)
-
-  function onTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0].clientX
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    if (touchStartX.current === null) return
-    const delta = e.changedTouches[0].clientX - touchStartX.current
-    if (delta > 50) prev()
-    else if (delta < -50) next()
-    touchStartX.current = null
-  }
-
-  return <div
-    role="region"
-    aria-roledescription="carousel"
-    aria-label="Stories"
-    tabIndex={0}
-    onKeyDown={e => { if (e.key === 'ArrowRight') next(); if (e.key === 'ArrowLeft') prev() }}
-    onTouchStart={onTouchStart}
-    onTouchEnd={onTouchEnd}
-    className="outline-none"
-  >
-    <div key={current.id} className="animate-in fade-in slide-in-from-right-3 duration-300">
-      <StoryCard story={current} archived={archived} />
-    </div>
-    {stories.length > 1 && <>
-      <div className="mt-4 flex items-center justify-center gap-4">
-        <button aria-label="Previous story" onClick={prev} className="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><ChevronLeft className="size-4" /></button>
-        <span className="text-xs font-medium text-slate-400">{safeIndex + 1} / {stories.length}</span>
-        <button aria-label="Next story" onClick={next} className="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><ChevronRight className="size-4" /></button>
-      </div>
-      {stories.length <= 8 && <div className="mt-3 flex justify-center gap-1.5">
-        {stories.map((s, i) => <button key={s.id} aria-label={`Go to story ${i + 1}`} onClick={() => setIndex(i)} className={cn('h-1.5 rounded-full transition-all', i === safeIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-slate-200')} />)}
-      </div>}
-    </>}
+  return <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    {stories.map(story => <div key={story.id} className="w-[85%] shrink-0 snap-start sm:w-[420px]">
+      <StoryCard story={story} archived={archived} />
+    </div>)}
   </div>
 }
 

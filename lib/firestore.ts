@@ -192,6 +192,18 @@ export type Story = {
   text: string
   createdAt: Timestamp | null
   reactions: number[]
+  repliesCount: number
+}
+
+export const REPLY_MAX_LENGTH = 500
+
+export type StoryReply = {
+  id: string
+  authorId: string
+  authorName: string
+  initials: string
+  text: string
+  createdAt: Timestamp | null
 }
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -219,6 +231,7 @@ function toStory(id: string, data: any): Story {
     text: data.text,
     createdAt: data.createdAt ?? null,
     reactions: REACTION_EMOJIS.map((_, i) => reactionsMap[i] ?? 0),
+    repliesCount: data.repliesCount ?? 0,
   }
 }
 
@@ -254,6 +267,35 @@ export async function createStory(user: User, authorName: string, category: stri
 
 export async function reactToStory(storyId: string, reactionIndex: number) {
   await updateDoc(doc(db, 'stories', storyId), { [`reactions.${reactionIndex}`]: increment(1) })
+}
+
+function toStoryReply(id: string, data: any): StoryReply {
+  return {
+    id,
+    authorId: data.authorId,
+    authorName: data.authorName,
+    initials: data.initials,
+    text: data.text,
+    createdAt: data.createdAt ?? null,
+  }
+}
+
+export function subscribeStoryReplies(storyId: string, cb: (replies: StoryReply[]) => void) {
+  const q = query(collection(db, 'stories', storyId, 'replies'), orderBy('createdAt', 'asc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toStoryReply(d.id, d.data()))))
+}
+
+export async function replyToStory(storyId: string, user: User, authorName: string, text: string) {
+  const trimmed = text.trim().slice(0, REPLY_MAX_LENGTH)
+  if (!trimmed) return
+  await addDoc(collection(db, 'stories', storyId, 'replies'), {
+    authorId: user.uid,
+    authorName,
+    initials: initialsFrom(authorName),
+    text: trimmed,
+    createdAt: serverTimestamp(),
+  })
+  await updateDoc(doc(db, 'stories', storyId), { repliesCount: increment(1) })
 }
 
 // ---------- Friends ----------

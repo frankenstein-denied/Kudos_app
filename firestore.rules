@@ -34,8 +34,18 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
-      allow update: if signedIn(); // reaction counters — any signed-in user may react
+      allow update: if signedIn(); // reaction/reply counters — any signed-in user may bump these
       allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+
+      match /replies/{replyId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500;
+        allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      }
     }
 
     match /friend_requests/{requestId} {
