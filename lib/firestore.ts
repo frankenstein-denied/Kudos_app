@@ -10,6 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -36,11 +37,79 @@ export type UserProfile = {
   profileVisibility: 'everyone' | 'friends'
 }
 
+// ---------- Usernames (unique handles) ----------
+// Firestore has no native unique constraint, so uniqueness is enforced via a
+// usernames/{handle} reservation doc: {uid}. Claiming one is a transaction so
+// two users racing for the same handle can't both win.
+
+export type UsernameCheckResult = { available: boolean; reason?: 'invalid' | 'taken' }
+
+function normalizeUsername(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9_]/g, '')
+}
+
+function isValidUsernameFormat(username: string): boolean {
+  return /^[a-z0-9_]{3,20}$/.test(username)
+}
+
+async function claimUsername(username: string, uid: string): Promise<boolean> {
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'usernames', username)
+      const snap = await tx.get(ref)
+      if (snap.exists()) throw new Error('taken')
+      tx.set(ref, { uid })
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function checkUsernameAvailable(rawUsername: string, currentUid: string): Promise<UsernameCheckResult> {
+  const username = normalizeUsername(rawUsername)
+  if (!isValidUsernameFormat(username)) return { available: false, reason: 'invalid' }
+  const snap = await getDoc(doc(db, 'usernames', username))
+  if (!snap.exists() || snap.data().uid === currentUid) return { available: true }
+  return { available: false, reason: 'taken' }
+}
+
+export async function updateUsername(uid: string, rawUsername: string, oldUsername: string): Promise<UsernameCheckResult> {
+  const username = normalizeUsername(rawUsername)
+  if (!isValidUsernameFormat(username)) return { available: false, reason: 'invalid' }
+  if (username === oldUsername) return { available: true }
+  try {
+    await runTransaction(db, async (tx) => {
+      const newRef = doc(db, 'usernames', username)
+      const newSnap = await tx.get(newRef)
+      if (newSnap.exists() && newSnap.data().uid !== uid) throw new Error('taken')
+      tx.set(newRef, { uid })
+      if (oldUsername) tx.delete(doc(db, 'usernames', oldUsername))
+      tx.update(doc(db, 'users', uid), { username })
+    })
+    return { available: true }
+  } catch (err) {
+    if (err instanceof Error && err.message === 'taken') return { available: false, reason: 'taken' }
+    throw err
+  }
+}
+
 export async function ensureUserProfile(user: User) {
   const ref = doc(db, 'users', user.uid)
   const snap = await getDoc(ref)
   if (snap.exists()) return
-  const username = (user.email ?? user.uid).split('@')[0].toLowerCase()
+
+  let base = normalizeUsername((user.email ?? user.uid).split('@')[0])
+  if (base.length < 3) base = (base + 'user').padEnd(3, '0')
+  base = base.slice(0, 16)
+
+  let username = base
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const candidate = (attempt === 0 ? base : `${base}${attempt + 1}`).slice(0, 20)
+    username = candidate
+    if (await claimUsername(candidate, user.uid)) break
+  }
+
   await setDoc(ref, {
     name: user.displayName || username,
     username,
@@ -92,6 +161,7 @@ export async function isFriendWith(uidA: string, uidB: string): Promise<boolean>
 // deleteUser() — once that succeeds the session is gone and these writes
 // would fail auth checks, leaving the data orphaned with no way to retry.
 export async function deleteUserAccountData(uid: string) {
+  const profile = await getUserProfile(uid)
   const [storiesSnap, friendshipsSnap, sentSnap, incomingSnap] = await Promise.all([
     getDocs(query(collection(db, 'stories'), where('authorId', '==', uid))),
     getDocs(query(collection(db, 'friendships'), where('users', 'array-contains', uid))),
@@ -103,6 +173,7 @@ export async function deleteUserAccountData(uid: string) {
     ...friendshipsSnap.docs.map((d) => deleteDoc(d.ref)),
     ...sentSnap.docs.map((d) => deleteDoc(d.ref)),
     ...incomingSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...(profile?.username ? [deleteDoc(doc(db, 'usernames', profile.username))] : []),
   ])
   await deleteDoc(doc(db, 'users', uid))
 }

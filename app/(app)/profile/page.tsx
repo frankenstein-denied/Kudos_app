@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Avatar, StoryCard } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
-import { subscribeUserStories, updateUserProfile, type Story } from '@/lib/firestore'
-import { initialsFrom } from '@/lib/utils'
+import { checkUsernameAvailable, subscribeUserStories, updateUserProfile, updateUsername, type Story } from '@/lib/firestore'
+import { cn, initialsFrom } from '@/lib/utils'
+
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth()
@@ -12,7 +14,10 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
+  const [username, setUsername] = useState('')
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [copied, setCopied] = useState(false)
 
   async function copyId() {
@@ -32,13 +37,47 @@ export default function ProfilePage() {
   function startEdit() {
     setName(profile?.name || '')
     setBio(profile?.bio || '')
+    setUsername(profile?.username || '')
+    setUsernameStatus('idle')
+    setSaveError('')
     setEditing(true)
   }
 
+  // Debounced availability check as the user types a new handle.
+  useEffect(() => {
+    if (!editing || !user || !profile) return
+    const normalized = username.trim().toLowerCase().replace(/^@/, '')
+    if (!normalized || normalized === profile.username) {
+      setUsernameStatus('idle')
+      return
+    }
+    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+      setUsernameStatus('invalid')
+      return
+    }
+    setUsernameStatus('checking')
+    const timer = setTimeout(async () => {
+      const result = await checkUsernameAvailable(normalized, user.uid)
+      setUsernameStatus(result.available ? 'available' : (result.reason ?? 'taken'))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [username, editing, user, profile])
+
   async function save() {
-    if (!user) return
+    if (!user || !profile) return
+    if (usernameStatus === 'taken' || usernameStatus === 'invalid') return
     setSaving(true)
+    setSaveError('')
     try {
+      const normalized = username.trim().toLowerCase().replace(/^@/, '')
+      if (normalized && normalized !== profile.username) {
+        const result = await updateUsername(user.uid, normalized, profile.username)
+        if (!result.available) {
+          setUsernameStatus(result.reason ?? 'taken')
+          setSaveError(result.reason === 'invalid' ? "That handle isn't valid." : 'That handle was just taken — try another.')
+          return
+        }
+      }
       await updateUserProfile(user.uid, { name: name.trim(), bio: bio.trim() })
       await refreshProfile()
       setEditing(false)
@@ -55,11 +94,24 @@ export default function ProfilePage() {
       {editing ? (
         <div className="mx-auto mt-4 flex max-w-sm flex-col gap-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm" />
+          <div>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2.5">
+              <span className="text-sm text-slate-400">@</span>
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="username" className="w-full text-sm outline-none" />
+            </div>
+            {usernameStatus !== 'idle' && <p className={cn('mt-1 text-left text-xs', usernameStatus === 'available' && 'text-emerald-600', (usernameStatus === 'taken' || usernameStatus === 'invalid') && 'text-red-600', usernameStatus === 'checking' && 'text-slate-400')}>
+              {usernameStatus === 'checking' && 'Checking availability…'}
+              {usernameStatus === 'available' && 'Available'}
+              {usernameStatus === 'taken' && 'Already taken'}
+              {usernameStatus === 'invalid' && '3–20 characters: letters, numbers, underscore'}
+            </p>}
+          </div>
           <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Bio" className="min-h-20 resize-none rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm" />
           <div className="flex justify-center gap-2">
-            <button onClick={save} disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+            <button onClick={save} disabled={saving || usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking'} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
             <button onClick={() => setEditing(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Cancel</button>
           </div>
+          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
         </div>
       ) : (
         <>
