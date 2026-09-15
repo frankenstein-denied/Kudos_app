@@ -138,8 +138,14 @@ export function subscribeStories(cb: (stories: Story[]) => void) {
 }
 
 export function subscribeUserStories(uid: string, cb: (stories: Story[]) => void) {
-  const q = query(collection(db, 'stories'), where('authorId', '==', uid), orderBy('createdAt', 'desc'))
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toStory(d.id, d.data()))))
+  // No orderBy here on purpose: authorId (==) + createdAt (orderBy on a different
+  // field) would require a composite index. Sort client-side instead.
+  const q = query(collection(db, 'stories'), where('authorId', '==', uid))
+  return onSnapshot(q, (snap) => {
+    const stories = snap.docs.map((d) => toStory(d.id, d.data()))
+    stories.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+    cb(stories)
+  })
 }
 
 export async function createStory(user: User, authorName: string, category: string, text: string) {
