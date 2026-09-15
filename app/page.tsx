@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth'
 import { Heart, Sparkles, MessageCircle, Users, Gift, Star } from 'lucide-react'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth-context'
@@ -19,7 +19,7 @@ const features = [
 
 export default function LandingPage() {
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, redirectError } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,8 +31,13 @@ export default function LandingPage() {
     setError('')
     setLoading(true)
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider())
-      router.push('/dashboard')
+      // signInWithRedirect, not signInWithPopup: on mobile browsers popup
+      // silently falls back to a redirect anyway, and that fallback's
+      // sessionStorage handshake is what breaks in storage-partitioned
+      // environments ("missing initial state"). A direct redirect avoids
+      // that extra layer. Completion is handled in AuthProvider via
+      // getRedirectResult once the browser returns here.
+      await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch (err) {
       setError('Could not sign in with Google. Please try again.')
       setLoading(false)
@@ -75,7 +80,7 @@ export default function LandingPage() {
             <GoogleIcon className="size-5" />
             {loading ? 'Signing in…' : 'Continue with Google'}
           </button>
-          {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {(error || redirectError) && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error || redirectError}</p>}
           <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
             or <Link href="/register" className="font-semibold text-blue-600">create an account</Link> with email
           </p>

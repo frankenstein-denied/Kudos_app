@@ -1,17 +1,23 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithRedirect } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import { useAuth } from '@/lib/auth-context'
 import { GoogleIcon } from '@/components/google-icon'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { user, loading: authLoading, redirectError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/dashboard')
+  }, [authLoading, user, router])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,8 +36,8 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider())
-      router.push('/dashboard')
+      // See lib/auth-context.tsx for why redirect, not popup.
+      await signInWithRedirect(auth, new GoogleAuthProvider())
     } catch {
       setError('Could not sign in with Google.')
       setLoading(false)
@@ -48,7 +54,7 @@ export default function LoginPage() {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-sm" />
         <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-sm" />
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {(error || redirectError) && <p className="text-sm text-red-600 dark:text-red-400">{error || redirectError}</p>}
         <button disabled={loading} className="rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white disabled:opacity-60">{loading ? 'Signing in…' : 'Log in'}</button>
       </form>
       <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">New here? <Link href="/register" className="font-semibold text-blue-600">Create an account</Link></p>
