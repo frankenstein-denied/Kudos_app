@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { Check, Copy } from 'lucide-react'
 import { Avatar, StoryCard } from '@/components/app-shell'
 import { useAuth } from '@/lib/auth-context'
 import { subscribeUserStories, updateUserProfile, type Story } from '@/lib/firestore'
@@ -12,6 +13,16 @@ export default function ProfilePage() {
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
   const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copyId() {
+    if (!user) return
+    try {
+      await navigator.clipboard.writeText(user.uid)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {}
+  }
 
   useEffect(() => {
     if (!user) return
@@ -56,6 +67,12 @@ export default function ProfilePage() {
           <p className="text-sm text-slate-500">@{profile.username}</p>
           {profile.bio && <p className="mx-auto mt-4 max-w-sm text-sm text-slate-600">{profile.bio}</p>}
           <div className="mt-5 flex justify-center gap-6 text-sm"><span><strong>{profile.friendsCount}</strong> Friends</span><span><strong>{profile.storiesCount}</strong> Stories</span></div>
+          <div className="mx-auto mt-5 flex max-w-xs items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-2">
+            <span className="min-w-0 flex-1 truncate text-left text-xs text-slate-500">{user?.uid}</span>
+            <button onClick={copyId} aria-label="Copy your unique ID" className="flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
+              {copied ? <><Check className="size-3.5 text-emerald-500" /> Copied</> : <><Copy className="size-3.5" /> Copy ID</>}
+            </button>
+          </div>
           <button onClick={startEdit} className="mt-5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Edit profile</button>
         </>
       )}

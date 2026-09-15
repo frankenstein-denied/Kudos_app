@@ -235,6 +235,17 @@ export function subscribeFriends(uid: string, cb: (friends: UserProfile[]) => vo
   })
 }
 
+export async function findUserByIdOrUsername(query_: string): Promise<UserProfile | null> {
+  const trimmed = query_.trim().replace(/^@/, '')
+  if (!trimmed) return null
+  const byId = await getUserProfile(trimmed)
+  if (byId) return byId
+  const snap = await getDocs(query(collection(db, 'users'), where('username', '==', trimmed.toLowerCase())))
+  if (snap.empty) return null
+  const d = snap.docs[0]
+  return { uid: d.id, ...(d.data() as Omit<UserProfile, 'uid'>) }
+}
+
 export async function suggestFriends(uid: string, exclude: Set<string>, max = 8): Promise<UserProfile[]> {
   const snap = await getDocs(query(collection(db, 'users'), where(documentId(), '!=', uid)))
   return snap.docs
