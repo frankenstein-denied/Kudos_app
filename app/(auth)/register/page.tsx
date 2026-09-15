@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { GoogleAuthProvider, createUserWithEmailAndPassword, signInWithRedirect, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth-context'
+import { signInWithGoogle } from '@/lib/google-auth'
 import { GoogleIcon } from '@/components/google-icon'
 
 export default function RegisterPage() {
@@ -38,8 +39,9 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      // See lib/auth-context.tsx for why redirect, not popup.
-      await signInWithRedirect(auth, new GoogleAuthProvider())
+      // See lib/google-auth.ts for why this picks popup vs. redirect.
+      const completed = await signInWithGoogle()
+      if (completed) router.push('/dashboard')
     } catch {
       setError('Could not sign up with Google.')
       setLoading(false)

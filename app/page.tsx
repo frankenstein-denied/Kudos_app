@@ -4,10 +4,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth'
 import { Heart, Sparkles, MessageCircle, Users, Gift, Star } from 'lucide-react'
-import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth-context'
+import { signInWithGoogle } from '@/lib/google-auth'
 import { GoogleIcon } from '@/components/google-icon'
 
 const features = [
@@ -31,13 +30,9 @@ export default function LandingPage() {
     setError('')
     setLoading(true)
     try {
-      // signInWithRedirect, not signInWithPopup: on mobile browsers popup
-      // silently falls back to a redirect anyway, and that fallback's
-      // sessionStorage handshake is what breaks in storage-partitioned
-      // environments ("missing initial state"). A direct redirect avoids
-      // that extra layer. Completion is handled in AuthProvider via
-      // getRedirectResult once the browser returns here.
-      await signInWithRedirect(auth, new GoogleAuthProvider())
+      // See lib/google-auth.ts for why this picks popup vs. redirect.
+      const completed = await signInWithGoogle()
+      if (completed) router.push('/dashboard')
     } catch (err) {
       setError('Could not sign in with Google. Please try again.')
       setLoading(false)
