@@ -81,6 +81,12 @@ export default function ProfilePage() {
       await updateUserProfile(user.uid, { name: name.trim(), bio: bio.trim() })
       await refreshProfile()
       setEditing(false)
+    } catch (err) {
+      setSaveError(
+        (err as { code?: string })?.code === 'permission-denied'
+          ? "Couldn't save — permission denied. Try signing out and back in."
+          : 'Could not save your profile. Please try again.',
+      )
     } finally {
       setSaving(false)
     }
